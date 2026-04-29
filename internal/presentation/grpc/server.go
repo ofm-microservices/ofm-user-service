@@ -1,0 +1,81 @@
+package grpc
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"user-service/config"
+	app "user-service/internal/application"
+
+	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	userv1 "github.com/ofm-microseervices/ofm-common/proto/user/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+type server struct {
+	userv1.UnimplementedUserQueryServiceServer
+	svc      app.UserService
+	cfg      config.GRPCConfig
+	log      logging.Logger
+	srv      *grpc.Server
+	listener net.Listener
+}
+
+// NewServer constructs the user-service gRPC query server.
+func NewServer(svc app.UserService, cfg config.GRPCConfig, log logging.Logger) (Server, error) {
+	if svc == nil {
+		return nil, ErrNilUserService
+	}
+	if log == nil {
+		return nil, ErrNilLogger
+	}
+
+	grpcSrv := grpc.NewServer()
+	s := &server{
+		svc: svc,
+		cfg: cfg,
+		log: log.With(logging.String("module", "grpc-server")),
+		srv: grpcSrv,
+	}
+	userv1.RegisterUserQueryServiceServer(grpcSrv, s)
+	return s, nil
+}
+
+// Start begins serving gRPC traffic on the configured address.
+func (s *server) Start() error {
+	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	s.listener = lis
+	s.log.Info("starting grpc server", logging.String("addr", addr))
+	return s.srv.Serve(lis)
+}
+
+// Shutdown gracefully stops the gRPC server.
+func (s *server) Shutdown(context.Context) error {
+	if s.srv != nil {
+		s.log.Info("shutting down grpc server")
+		s.srv.GracefulStop()
+	}
+	if s.listener != nil {
+		return s.listener.Close()
+	}
+	return nil
+}
+
+// ExistsByUsername answers whether user-service already owns the supplied
+// username.
+func (s *server) ExistsByUsername(ctx context.Context, req *userv1.ExistsByUsernameRequest) (*userv1.ExistsByUsernameResponse, error) {
+	exists, err := s.svc.ExistsByUsername(ctx, req.GetUsername())
+	if err != nil {
+		s.log.Error("exists by username failed", logging.Err(err))
+		return nil, status.Error(codes.Internal, "internal server error")
+	}
+
+	return &userv1.ExistsByUsernameResponse{Exists: exists}, nil
+}
