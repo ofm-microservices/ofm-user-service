@@ -79,3 +79,24 @@ func (s *server) ExistsByUsername(ctx context.Context, req *userv1.ExistsByUsern
 
 	return &userv1.ExistsByUsernameResponse{Exists: exists}, nil
 }
+
+// ActivateUser marks a saga-created user profile as active.
+func (s *server) ActivateUser(ctx context.Context, req *userv1.ActivateUserRequest) (*userv1.ActivateUserResponse, error) {
+	user, err := s.svc.ActivateUser(ctx, req.GetUserId())
+	if err != nil {
+		s.log.Error("activate user failed", logging.String("user_id", req.GetUserId()), logging.Err(err))
+		return nil, status.Error(codes.Internal, "internal server error")
+	}
+
+	return &userv1.ActivateUserResponse{UserId: user.ID, Status: user.Status}, nil
+}
+
+// DeactivateUser marks a saga-created user profile inactive as compensation.
+func (s *server) DeactivateUser(ctx context.Context, req *userv1.DeactivateUserRequest) (*userv1.DeactivateUserResponse, error) {
+	if err := s.svc.DeactivateUser(ctx, req.GetUserId()); err != nil {
+		s.log.Error("deactivate user failed", logging.String("user_id", req.GetUserId()), logging.Err(err))
+		return nil, status.Error(codes.Internal, "internal server error")
+	}
+
+	return &userv1.DeactivateUserResponse{UserId: req.GetUserId(), Status: "registration_failed"}, nil
+}

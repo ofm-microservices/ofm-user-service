@@ -8,6 +8,32 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+type bootstrapConn interface {
+	JetStream() (jetStreamManager, error)
+	Close()
+}
+
+type jetStreamManager interface {
+	AddStream(cfg *nats.StreamConfig, opts ...nats.JSOpt) (*nats.StreamInfo, error)
+	UpdateStream(cfg *nats.StreamConfig, opts ...nats.JSOpt) (*nats.StreamInfo, error)
+}
+
+type realBootstrapConn struct {
+	*nats.Conn
+}
+
+func (c realBootstrapConn) JetStream() (jetStreamManager, error) {
+	return c.Conn.JetStream()
+}
+
+var connectBootstrap = func(cfg config.NATSConfig) (bootstrapConn, error) {
+	nc, err := Connect(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return realBootstrapConn{Conn: nc}, nil
+}
+
 // EnsureStream creates or updates the JetStream streams required by
 // user-service.
 func EnsureStream(cfg config.NATSConfig, log logging.Logger) error {
@@ -21,7 +47,7 @@ func EnsureStream(cfg config.NATSConfig, log logging.Logger) error {
 		logging.String("subject", cfg.UserCreatedSubject),
 	)
 
-	nc, err := Connect(cfg)
+	nc, err := connectBootstrap(cfg)
 	if err != nil {
 		return err
 	}

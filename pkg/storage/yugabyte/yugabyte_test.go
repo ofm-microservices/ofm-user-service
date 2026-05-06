@@ -31,6 +31,12 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+		return
+	} else if err := provider.Health(context.Background()); err != nil {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -45,6 +51,9 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("Open", func() {
 	It("opens a real Yugabyte connection", func() {
+		if storageSuiteContainer == nil {
+			Skip("Docker is not available for the Yugabyte storage suite")
+		}
 		dbx, err := Open(storageSuiteCfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dbx.Ping()).To(Succeed())
@@ -68,6 +77,9 @@ var _ = Describe("Open", func() {
 
 var _ = Describe("RunMigrations", func() {
 	It("applies migrations and tolerates no-change reruns", func() {
+		if storageSuiteContainer == nil {
+			Skip("Docker is not available for the Yugabyte storage suite")
+		}
 		cfg := storageSuiteCfg
 		cfg.MigrationsPath = "file://" + filepath.Join(userServiceRoot(), "migration", "yugabyte")
 
@@ -94,6 +106,9 @@ var _ = Describe("RunMigrations", func() {
 	})
 
 	It("wraps migration execution failures", func() {
+		if storageSuiteContainer == nil {
+			Skip("Docker is not available for the Yugabyte storage suite")
+		}
 		tempDir, err := os.MkdirTemp("", "user-service-bad-migrations-*")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tempDir)
@@ -112,6 +127,9 @@ var _ = Describe("RunMigrations", func() {
 	})
 
 	It("resolves relative migration paths", func() {
+		if storageSuiteContainer == nil {
+			Skip("Docker is not available for the Yugabyte storage suite")
+		}
 		wd, err := os.Getwd()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.Chdir(userServiceRoot())).To(Succeed())
@@ -130,6 +148,9 @@ var _ = Describe("RunMigrations", func() {
 
 var _ = Describe("WithTx", func() {
 	It("commits when the callback succeeds", func() {
+		if storageSuiteContainer == nil {
+			Skip("Docker is not available for the Yugabyte storage suite")
+		}
 		dbx, err := Open(storageSuiteCfg)
 		Expect(err).NotTo(HaveOccurred())
 		defer dbx.Close()
@@ -151,6 +172,9 @@ var _ = Describe("WithTx", func() {
 	})
 
 	It("rolls back when the callback fails", func() {
+		if storageSuiteContainer == nil {
+			Skip("Docker is not available for the Yugabyte storage suite")
+		}
 		dbx, err := Open(storageSuiteCfg)
 		Expect(err).NotTo(HaveOccurred())
 		defer dbx.Close()

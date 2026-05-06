@@ -11,10 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jmoiron/sqlx"
 	"github.com/ofm-microseervices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/fx/fxtest"
@@ -42,6 +44,12 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+		return
+	} else if err := provider.Health(context.Background()); err != nil {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -242,6 +250,9 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("ensures streams and opens an event broker against real nats", func() {
+		if fxNATSContainer == nil {
+			Skip("Docker is not available for the FX NATS suite")
+		}
 		cfg.NATS = fxNATSCfg
 
 		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
@@ -274,6 +285,9 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("runs migrations and opens a real yugabyte connection", func() {
+		if fxYBContainer == nil {
+			Skip("Docker is not available for the FX Yugabyte suite")
+		}
 		cfg.DB = fxYBCfg
 
 		Expect(InvokeRunMigrations(cfg, logger)).To(Succeed())
@@ -305,6 +319,9 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("opens a real redis connection", func() {
+		if fxRedisContainer == nil {
+			Skip("Docker is not available for the FX Redis suite")
+		}
 		cfg.Redis = fxRedisCfg
 
 		client, err := ProvideRedisClient(lc, cfg, logger)
@@ -325,6 +342,54 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(client).To(BeNil())
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("covers storage and messaging provider success paths with seams", func() {
+		previousRunMigrations := runMigrations
+		previousOpenYugaByteDB := openYugaByteDB
+		previousOpenRedisClient := openRedisClient
+		previousEnsureStream := ensureStream
+		previousNewEventBroker := newEventBroker
+		defer func() {
+			runMigrations = previousRunMigrations
+			openYugaByteDB = previousOpenYugaByteDB
+			openRedisClient = previousOpenRedisClient
+			ensureStream = previousEnsureStream
+			newEventBroker = previousNewEventBroker
+		}()
+
+		runMigrations = func(config.DBConfig) error { return nil }
+		Expect(InvokeRunMigrations(cfg, logger)).To(Succeed())
+
+		rawDB, mock, err := sqlmock.New()
+		Expect(err).NotTo(HaveOccurred())
+		dbx := sqlx.NewDb(rawDB, "sqlmock")
+		openYugaByteDB = func(config.DBConfig) (*sqlx.DB, error) { return dbx, nil }
+		dbProvided, err := ProvideYugaByteDB(lc, cfg, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dbProvided).To(Equal(dbx))
+		mock.ExpectClose()
+
+		redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+		openRedisClient = func(context.Context, config.RedisConfig) (*redis.Client, error) { return redisClient, nil }
+		redisProvided, err := ProvideRedisClient(lc, cfg, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(redisProvided).To(Equal(redisClient))
+
+		ensureStream = func(config.NATSConfig, logging.Logger) error { return nil }
+		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
+
+		stubBroker := &stubEventBroker{}
+		newEventBroker = func(config.NATSConfig, logging.Logger) (eventbroker.EventBroker, error) {
+			return stubBroker, nil
+		}
+		providedBroker, err := ProvideEventBroker(lc, cfg, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(providedBroker).To(Equal(stubBroker))
+
+		Expect(lc.Start(context.Background())).To(Succeed())
+		Expect(lc.Stop(context.Background())).To(Succeed())
+		Expect(mock.ExpectationsWereMet()).To(Succeed())
+	})
 })
 
 type stubWriteRepo struct{}
@@ -336,7 +401,11 @@ func (s *stubWriteRepo) GetByID(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
 }
 func (s *stubWriteRepo) ExistsByUsername(context.Context, string) (bool, error) { return false, nil }
-func (s *stubWriteRepo) DeleteByID(context.Context, string) error               { return nil }
+func (s *stubWriteRepo) ActivateByID(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubWriteRepo) DeactivateByID(context.Context, string) error { return nil }
+func (s *stubWriteRepo) DeleteByID(context.Context, string) error     { return nil }
 
 type stubReadRepo struct{}
 
@@ -349,7 +418,11 @@ func (s *stubUserService) CreateUser(context.Context, string, string, string, st
 	return &user.User{}, nil
 }
 func (s *stubUserService) ExistsByUsername(context.Context, string) (bool, error) { return false, nil }
-func (s *stubUserService) DeleteUser(context.Context, string) error               { return nil }
+func (s *stubUserService) ActivateUser(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubUserService) DeactivateUser(context.Context, string) error { return nil }
+func (s *stubUserService) DeleteUser(context.Context, string) error     { return nil }
 
 type stubEventBroker struct{}
 

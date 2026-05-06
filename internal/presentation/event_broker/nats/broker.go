@@ -11,10 +11,18 @@ import (
 )
 
 type natsBroker struct {
-	nc             *nats.Conn
+	nc             natsConn
+	jsConn         *nats.Conn
 	log            logging.Logger
 	validator      PullConsumerConfigValidator
 	runtimeFactory PullConsumerRuntimeFactory
+}
+
+type natsConn interface {
+	Publish(subj string, data []byte) error
+	Subscribe(subj string, cb nats.MsgHandler) (*nats.Subscription, error)
+	FlushWithContext(ctx context.Context) error
+	Close()
 }
 
 // NewBroker constructs the concrete NATS event broker used by user-service.
@@ -48,6 +56,7 @@ func NewBroker(cfg config.NATSConfig, log logging.Logger) (eventbroker.EventBrok
 
 	return &natsBroker{
 		nc:             nc,
+		jsConn:         nc,
 		log:            lg,
 		validator:      newPullConsumerConfigValidator(),
 		runtimeFactory: newPullConsumerRuntimeFactory(),
@@ -105,7 +114,7 @@ func (b *natsBroker) RunPullConsumer(ctx context.Context, cfg config.PullConsume
 	if runtimeFactory == nil {
 		runtimeFactory = newPullConsumerRuntimeFactory()
 	}
-	runtime, err := runtimeFactory.Create(b.nc, b.log, cfg, handler)
+	runtime, err := runtimeFactory.Create(b.jsConn, b.log, cfg, handler)
 	if err != nil {
 		return err
 	}
@@ -139,7 +148,7 @@ func (b *natsBroker) Close() {
 
 // Flush blocks until buffered NATS publications are acknowledged or the
 // supplied context expires.
-func Flush(ctx context.Context, nc *nats.Conn) error {
+func Flush(ctx context.Context, nc natsConn) error {
 	flushCtx := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc

@@ -1,0 +1,5 @@
+ALTER TABLE users
+    DROP COLUMN IF EXISTS status;
+
+ALTER TABLE users
+    DROP COLUMN IF EXISTS is_active;

@@ -14,6 +14,14 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+type migrator interface {
+	Up() error
+}
+
+var newMigrator = func(sourceURL, databaseURL string) (migrator, error) {
+	return migrate.New(sourceURL, databaseURL)
+}
+
 // RunMigrations applies the user-service Yugabyte schema migrations.
 func RunMigrations(cfg config.DBConfig) error {
 	dsn := fmt.Sprintf(
@@ -39,7 +47,7 @@ func RunMigrations(cfg config.DBConfig) error {
 		}
 	}
 
-	m, err := migrate.New(migrationPath, dsn)
+	m, err := newMigrator(migrationPath, dsn)
 	if err != nil {
 		return WrapCreateMigratorError(err)
 	}

@@ -2,13 +2,13 @@ package repository
 
 const (
 	createUserQuery = `
-		INSERT INTO users (user_id, username, first_name, last_name)
-		VALUES ($1, $2, $3, $4)
-		RETURNING user_id, username, first_name, last_name, created_at, updated_at
+		INSERT INTO users (user_id, username, first_name, last_name, status)
+		VALUES ($1, $2, $3, $4, 'pending_registration')
+		RETURNING user_id, username, first_name, last_name, is_active, status, created_at, updated_at
 	`
 
 	getUserByID = `
-		SELECT user_id, username, first_name, last_name, created_at, updated_at
+		SELECT user_id, username, first_name, last_name, is_active, status, created_at, updated_at
 		FROM users
 		WHERE user_id = $1
 	`
@@ -23,6 +23,23 @@ const (
 
 	deleteUserByID = `
 		DELETE FROM users
+		WHERE user_id = $1
+	`
+
+	activateUserByID = `
+		UPDATE users
+		SET is_active = TRUE,
+			status = 'active',
+			updated_at = NOW()
+		WHERE user_id = $1
+		RETURNING user_id, username, first_name, last_name, is_active, status, created_at, updated_at
+	`
+
+	deactivateUserByID = `
+		UPDATE users
+		SET is_active = FALSE,
+			status = 'registration_failed',
+			updated_at = NOW()
 		WHERE user_id = $1
 	`
 )

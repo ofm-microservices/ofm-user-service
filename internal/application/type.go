@@ -11,6 +11,8 @@ import (
 type UserService interface {
 	CreateUser(ctx context.Context, userID, username, firstName, lastName string) (*domain.User, error)
 	ExistsByUsername(ctx context.Context, username string) (bool, error)
+	ActivateUser(ctx context.Context, userID string) (*domain.User, error)
+	DeactivateUser(ctx context.Context, userID string) error
 	DeleteUser(ctx context.Context, userID string) error
 }
 
