@@ -82,6 +82,51 @@ func (s *userService) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
+func (s *userService) ActivateUser(ctx context.Context, userID string) (*domain.User, error) {
+	s.log.Info("activate user command received", logging.String("user_id", userID))
+
+	if userID == "" {
+		s.log.Error("invalid activate user command", logging.String("reason", "empty user_id"))
+		return nil, domain.ErrInvalidUserID
+	}
+
+	user, err := s.repo.ActivateByID(ctx, userID)
+	if err != nil {
+		s.log.Error("failed to activate user", logging.String("user_id", userID), logging.Err(err))
+		return nil, err
+	}
+
+	if err := s.readRepo.Upsert(ctx, user); err != nil {
+		s.log.Error("failed to upsert activated user read model", logging.String("user_id", user.ID), logging.Err(err))
+		return nil, err
+	}
+
+	s.log.Info("user activated", logging.String("user_id", user.ID))
+	return user, nil
+}
+
+func (s *userService) DeactivateUser(ctx context.Context, userID string) error {
+	s.log.Info("deactivate user command received", logging.String("user_id", userID))
+
+	if userID == "" {
+		s.log.Error("invalid deactivate user command", logging.String("reason", "empty user_id"))
+		return domain.ErrInvalidUserID
+	}
+
+	if err := s.repo.DeactivateByID(ctx, userID); err != nil {
+		s.log.Error("failed to deactivate user", logging.String("user_id", userID), logging.Err(err))
+		return err
+	}
+
+	if err := s.readRepo.DeleteByID(ctx, userID); err != nil {
+		s.log.Error("failed to delete deactivated user read model", logging.String("user_id", userID), logging.Err(err))
+		return err
+	}
+
+	s.log.Info("user deactivated", logging.String("user_id", userID))
+	return nil
+}
+
 func (s *userService) ExistsByUsername(ctx context.Context, username string) (bool, error) {
 	if strings.TrimSpace(username) == "" {
 		return false, domain.ErrInvalidUsername

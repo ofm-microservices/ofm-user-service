@@ -17,9 +17,12 @@ var MessagingModule = fx.Options(
 	fx.Provide(ProvideEventBroker),
 )
 
+var ensureStream = natsbootstrap.EnsureStream
+var newEventBroker = broker.NewBroker
+
 // InvokeEnsureStream ensures the JetStream streams user-service depends on.
 func InvokeEnsureStream(cfg *config.Config, lg logging.Logger) error {
-	if err := natsbootstrap.EnsureStream(cfg.NATS, lg); err != nil {
+	if err := ensureStream(cfg.NATS, lg); err != nil {
 		lg.Error("bootstrap jetstream resources failed", logging.Err(err))
 		return err
 	}
@@ -29,7 +32,7 @@ func InvokeEnsureStream(cfg *config.Config, lg logging.Logger) error {
 
 // ProvideEventBroker constructs the concrete NATS event broker.
 func ProvideEventBroker(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (eventbroker.EventBroker, error) {
-	eventBroker, err := broker.NewBroker(cfg.NATS, lg)
+	eventBroker, err := newEventBroker(cfg.NATS, lg)
 	if err != nil {
 		lg.Error("connect nats failed", logging.Err(err))
 		return nil, err

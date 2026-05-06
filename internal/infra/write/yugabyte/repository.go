@@ -40,6 +40,8 @@ func (r *repo) Create(ctx context.Context, params domain.CreateUserParams) (*dom
 		&userRow.Username,
 		&userRow.FirstName,
 		&userRow.LastName,
+		&userRow.IsActive,
+		&userRow.Status,
 		&userRow.CreatedAt,
 		&userRow.UpdatedAt,
 	); err != nil {
@@ -56,6 +58,8 @@ func (r *repo) GetByID(ctx context.Context, userID string) (*domain.User, error)
 		&userRow.Username,
 		&userRow.FirstName,
 		&userRow.LastName,
+		&userRow.IsActive,
+		&userRow.Status,
 		&userRow.CreatedAt,
 		&userRow.UpdatedAt,
 	); err != nil {
@@ -72,6 +76,41 @@ func (r *repo) ExistsByUsername(ctx context.Context, username string) (bool, err
 	}
 
 	return exists, nil
+}
+
+func (r *repo) ActivateByID(ctx context.Context, userID string) (*domain.User, error) {
+	var userRow model.UserRow
+	if err := r.db.QueryRowContext(ctx, activateUserByID, userID).Scan(
+		&userRow.ID,
+		&userRow.Username,
+		&userRow.FirstName,
+		&userRow.LastName,
+		&userRow.IsActive,
+		&userRow.Status,
+		&userRow.CreatedAt,
+		&userRow.UpdatedAt,
+	); err != nil {
+		return nil, r.translator.TranslateFindUserError(err)
+	}
+
+	return mapper.MapUserRowToDomain(userRow), nil
+}
+
+func (r *repo) DeactivateByID(ctx context.Context, userID string) error {
+	result, err := r.db.ExecContext(ctx, deactivateUserByID, userID)
+	if err != nil {
+		return r.translator.TranslateDeleteUserError(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return r.translator.TranslateDeleteUserError(err)
+	}
+	if rowsAffected == 0 {
+		return domain.ErrUserNotFound
+	}
+
+	return nil
 }
 
 func (r *repo) DeleteByID(ctx context.Context, userID string) error {

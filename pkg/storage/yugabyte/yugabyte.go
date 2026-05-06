@@ -9,6 +9,8 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+var connectDB = sqlx.Connect
+
 // Open creates the user-service YugabyteDB connection pool.
 func Open(cfg config.DBConfig) (*sqlx.DB, error) {
 	dsn := fmt.Sprintf(
@@ -21,7 +23,7 @@ func Open(cfg config.DBConfig) (*sqlx.DB, error) {
 		cfg.SSLMode,
 	)
 
-	db, err := sqlx.Connect("pgx", dsn)
+	db, err := connectDB("pgx", dsn)
 	if err != nil {
 		return nil, WrapOpenDBError(err)
 	}

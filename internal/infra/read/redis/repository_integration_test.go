@@ -31,6 +31,12 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+		return
+	} else if err := provider.Health(context.Background()); err != nil {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -51,6 +57,9 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("repository integration", func() {
 	BeforeEach(func() {
+		if redisSuiteClient == nil {
+			Skip("Docker is not available for the Redis suite")
+		}
 		Expect(redisSuiteClient.FlushDB(context.Background()).Err()).To(Succeed())
 	})
 
@@ -100,6 +109,12 @@ var _ = Describe("repository integration", func() {
 })
 
 var _ = Describe("storage integration", func() {
+	BeforeEach(func() {
+		if redisSuiteClient == nil {
+			Skip("Docker is not available for the Redis suite")
+		}
+	})
+
 	It("opens a real redis connection", func() {
 		client, err := pkgrdb.Open(context.Background(), redisSuiteCfg)
 

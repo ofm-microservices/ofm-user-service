@@ -24,29 +24,35 @@ var (
 	repoSuiteDB        *sqlx.DB
 )
 
-var _ = BeforeSuite(func() {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	repoSuiteContainer, repoSuiteCfg = startYugabyteContainer(ctx)
-	Expect(pkgdb.RunMigrations(repoSuiteCfg)).To(Succeed())
-
-	var err error
-	repoSuiteDB, err = pkgdb.Open(repoSuiteCfg)
-	Expect(err).NotTo(HaveOccurred())
-})
-
-var _ = AfterSuite(func() {
-	if repoSuiteDB != nil {
-		Expect(repoSuiteDB.Close()).To(Succeed())
-	}
-	if repoSuiteContainer != nil {
-		Expect(repoSuiteContainer.Terminate(context.Background())).To(Succeed())
-	}
-})
-
-var _ = Describe("repository integration", func() {
+var _ = Describe("repository integration", Ordered, func() {
 	var repoAny user.UserRepository
+
+	BeforeAll(func() {
+		if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+			Skip("Docker is not available for the Yugabyte suite")
+		} else if err := provider.Health(context.Background()); err != nil {
+			Skip("Docker is not healthy for the Yugabyte suite")
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		repoSuiteContainer, repoSuiteCfg = startYugabyteContainer(ctx)
+		Expect(pkgdb.RunMigrations(repoSuiteCfg)).To(Succeed())
+
+		var err error
+		repoSuiteDB, err = pkgdb.Open(repoSuiteCfg)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterAll(func() {
+		if repoSuiteDB != nil {
+			Expect(repoSuiteDB.Close()).To(Succeed())
+		}
+		if repoSuiteContainer != nil {
+			Expect(repoSuiteContainer.Terminate(context.Background())).To(Succeed())
+		}
+	})
 
 	BeforeEach(func() {
 		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE users`)

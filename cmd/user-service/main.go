@@ -19,9 +19,7 @@ func newApp() *fx.App {
 	)
 }
 
-var runApp = func(app *fx.App) {
-	app.Run()
-}
+var runApp = (*fx.App).Run
 
 func main() {
 	runApp(newApp())
