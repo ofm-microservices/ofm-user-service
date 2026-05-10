@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"strings"
 	domain "user-service/internal/domain"
 )

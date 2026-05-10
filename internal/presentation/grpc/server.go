@@ -7,8 +7,8 @@ import (
 	"user-service/config"
 	app "user-service/internal/application"
 
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
-	userv1 "github.com/ofm-microseervices/ofm-common/proto/user/v1"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	userv1 "github.com/ofm-microservices/ofm-common/proto/user/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

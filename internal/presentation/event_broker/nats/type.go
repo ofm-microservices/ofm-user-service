@@ -6,7 +6,7 @@ import (
 	eventbroker "user-service/internal/presentation/event_broker"
 
 	"github.com/nats-io/nats.go"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 // RegistrationSagaSubscriber consumes user-related saga commands from NATS.

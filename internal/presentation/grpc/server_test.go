@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
-	userv1 "github.com/ofm-microseervices/ofm-common/proto/user/v1"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	userv1 "github.com/ofm-microservices/ofm-common/proto/user/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"

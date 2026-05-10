@@ -9,7 +9,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/nats-io/nats.go v1.47.0
-	github.com/ofm-microseervices/ofm-common v0.0.0
+	github.com/ofm-microservices/ofm-common v0.0.0
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/redis/go-redis/v9 v9.18.0
@@ -106,4 +106,4 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 )
 
-replace github.com/ofm-microseervices/ofm-common => ../ofm-common
+replace github.com/ofm-microservices/ofm-common => ../ofm-common

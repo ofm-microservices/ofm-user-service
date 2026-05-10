@@ -2,7 +2,7 @@ package appfx
 
 import (
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"user-service/config"
 	app "user-service/internal/application"
 	eventbroker "user-service/internal/presentation/event_broker"
