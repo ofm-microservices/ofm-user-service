@@ -8,6 +8,7 @@ import (
 	app "user-service/internal/application"
 
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 	userv1 "github.com/ofm-microservices/ofm-common/proto/user/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -32,7 +33,7 @@ func NewServer(svc app.UserService, cfg config.GRPCConfig, log logging.Logger) (
 		return nil, ErrNilLogger
 	}
 
-	grpcSrv := grpc.NewServer()
+	grpcSrv := grpc.NewServer(grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()))
 	s := &server{
 		svc: svc,
 		cfg: cfg,

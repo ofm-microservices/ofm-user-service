@@ -188,7 +188,7 @@ var _ = Describe("Server", func() {
 		})
 
 		It("serves requests and shuts down cleanly", func() {
-			srv, err := NewServer(svc, config.GRPCConfig{Host: "127.0.0.1", Port: 19093}, logger)
+			srv, err := NewServer(svc, config.GRPCConfig{Host: "127.0.0.1", Port: 19593}, logger)
 			Expect(err).NotTo(HaveOccurred())
 
 			serverErr := make(chan error, 1)
@@ -199,7 +199,7 @@ var _ = Describe("Server", func() {
 			connCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			conn, err := ggrpc.DialContext(connCtx, "127.0.0.1:19093",
+			conn, err := ggrpc.DialContext(connCtx, "127.0.0.1:19593",
 				ggrpc.WithTransportCredentials(insecure.NewCredentials()),
 				ggrpc.WithBlock(),
 			)

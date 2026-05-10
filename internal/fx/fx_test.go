@@ -99,7 +99,7 @@ var _ = Describe("fx providers and invokes", func() {
 			},
 			GRPC: config.GRPCConfig{
 				Host: "127.0.0.1",
-				Port: 19092,
+				Port: 19592,
 			},
 			Redis: config.RedisConfig{
 				Host: "localhost",

@@ -7,11 +7,12 @@ import (
 
 // Config groups the full user-service runtime configuration.
 type Config struct {
-	App   AppConfig
-	DB    DBConfig
-	GRPC  GRPCConfig
-	Redis RedisConfig
-	NATS  NATSConfig
+	App     AppConfig
+	DB      DBConfig
+	GRPC    GRPCConfig
+	Metrics MetricsConfig
+	Redis   RedisConfig
+	NATS    NATSConfig
 }
 
 // Load reads environment variables into Config and applies defaults.
