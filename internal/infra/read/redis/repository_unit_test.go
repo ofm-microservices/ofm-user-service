@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/redis/go-redis/v9"
@@ -11,15 +12,23 @@ import (
 )
 
 var _ = Describe("repository unit", func() {
+	var logger logging.Logger
+
+	BeforeEach(func() {
+		var err error
+		logger, err = logging.New("user-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("validates constructor inputs and nil users", func() {
-		repoAny, err := New(nil)
+		repoAny, err := New(nil, logger)
 		Expect(repoAny).To(BeNil())
 		Expect(err).To(MatchError(ErrNilRedisClient))
 
 		client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
 		defer func() { Expect(client.Close()).To(Succeed()) }()
 
-		repoAny, err = New(client)
+		repoAny, err = New(client, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(repoAny.Upsert(context.Background(), nil)).To(MatchError(ErrNilUser))
 		Expect(UserCacheKey("user-1")).To(Equal("user:user-1"))
@@ -35,7 +44,7 @@ var _ = Describe("repository unit", func() {
 		})
 		defer func() { Expect(client.Close()).To(Succeed()) }()
 
-		repoAny, err := New(client)
+		repoAny, err := New(client, logger)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = repoAny.Upsert(context.Background(), &user.User{ID: "user-1", Username: "alex"})

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/redis/go-redis/v9"
@@ -56,21 +57,26 @@ var _ = AfterSuite(func() {
 })
 
 var _ = Describe("repository integration", func() {
+	var logger logging.Logger
+
 	BeforeEach(func() {
 		if redisSuiteClient == nil {
 			Skip("Docker is not available for the Redis suite")
 		}
+		var err error
+		logger, err = logging.New("user-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
 		Expect(redisSuiteClient.FlushDB(context.Background()).Err()).To(Succeed())
 	})
 
 	It("validates constructor dependencies", func() {
-		repo, err := New(nil)
+		repo, err := New(nil, logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilRedisClient))
 	})
 
 	It("upserts and deletes a projected user", func() {
-		repoAny, err := New(redisSuiteClient)
+		repoAny, err := New(redisSuiteClient, logger)
 		Expect(err).NotTo(HaveOccurred())
 
 		u := &user.User{
@@ -97,7 +103,7 @@ var _ = Describe("repository integration", func() {
 	})
 
 	It("rejects nil users", func() {
-		repoAny, err := New(redisSuiteClient)
+		repoAny, err := New(redisSuiteClient, logger)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(repoAny.Upsert(context.Background(), nil)).To(MatchError(ErrNilUser))

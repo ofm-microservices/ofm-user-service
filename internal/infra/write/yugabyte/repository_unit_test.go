@@ -9,6 +9,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jmoiron/sqlx"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	user "user-service/internal/domain"
@@ -38,10 +39,13 @@ var _ = Describe("repository unit", func() {
 		dbx     *sqlx.DB
 		mock    sqlmock.Sqlmock
 		repoAny user.UserRepository
+		logger  logging.Logger
 	)
 
 	BeforeEach(func() {
 		var err error
+		logger, err = logging.New("user-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
 		db, mock, err = sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
 		dbx = sqlx.NewDb(db, "sqlmock")
@@ -49,7 +53,7 @@ var _ = Describe("repository unit", func() {
 			createErr: user.ErrFailedToCreateUser,
 			findErr:   user.ErrFailedToFindUser,
 			deleteErr: user.ErrFailedToDeleteUser,
-		})
+		}, logger)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -60,11 +64,11 @@ var _ = Describe("repository unit", func() {
 	})
 
 	It("validates constructor dependencies without a database", func() {
-		repo, err := New(nil, fakeTranslator{})
+		repo, err := New(nil, fakeTranslator{}, logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilYugaByteDB))
 
-		repo, err = New(dbx, nil)
+		repo, err = New(dbx, nil, logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilDBErrorTranslator))
 	})

@@ -8,6 +8,7 @@ import (
 var (
 	ErrNilRedisClient = errors.New("redis client is nil")
 	ErrNilUser        = errors.New("user is nil")
+	ErrNilLogger      = errors.New("logger is nil")
 )
 
 // WrapMarshalUserCacheError annotates cache serialization failures.

@@ -11,6 +11,7 @@ type Config struct {
 	DB      DBConfig
 	GRPC    GRPCConfig
 	Metrics MetricsConfig
+	Tracing TracingConfig
 	Redis   RedisConfig
 	NATS    NATSConfig
 }

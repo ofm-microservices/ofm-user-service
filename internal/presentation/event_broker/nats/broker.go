@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/observability/natstrace"
 	"time"
 	"user-service/config"
 	eventbroker "user-service/internal/presentation/event_broker"
@@ -20,6 +21,7 @@ type natsBroker struct {
 
 type natsConn interface {
 	Publish(subj string, data []byte) error
+	PublishMsg(msg *nats.Msg) error
 	Subscribe(subj string, cb nats.MsgHandler) (*nats.Subscription, error)
 	FlushWithContext(ctx context.Context) error
 	Close()
@@ -64,13 +66,34 @@ func NewBroker(cfg config.NATSConfig, log logging.Logger) (eventbroker.EventBrok
 }
 
 func (b *natsBroker) Publish(ctx context.Context, subject string, payload []byte) error {
-	b.log.Debug("publishing message", logging.String("subject", subject), logging.Int("bytes", len(payload)))
+	started := time.Now()
+	b.log.Debug("publishing message",
+		logging.Operation("nats.publish"),
+		logging.String("subject", subject),
+		logging.Int("bytes", len(payload)),
+	)
 
-	if err := b.nc.Publish(subject, payload); err != nil {
+	if err := b.nc.PublishMsg(natstrace.NewMessage(ctx, subject, payload)); err != nil {
+		b.log.Error("message publish failed",
+			logging.Operation("nats.publish"),
+			logging.Attempt(1),
+			logging.Retryable(true),
+			logging.DurationMS(time.Since(started)),
+			logging.String("subject", subject),
+			logging.Err(err),
+		)
 		return WrapPublishToNATSError(subject, err)
 	}
 
 	if err := Flush(ctx, b.nc); err != nil {
+		b.log.Error("message flush failed",
+			logging.Operation("nats.flush"),
+			logging.Attempt(1),
+			logging.Retryable(true),
+			logging.DurationMS(time.Since(started)),
+			logging.String("subject", subject),
+			logging.Err(err),
+		)
 		return WrapFlushNATSPublisherError(err)
 	}
 
@@ -78,17 +101,30 @@ func (b *natsBroker) Publish(ctx context.Context, subject string, payload []byte
 }
 
 func (b *natsBroker) Subscribe(ctx context.Context, subject string, handler eventbroker.MessageHandler) error {
-	b.log.Info("subscribing to subject", logging.String("subject", subject))
+	b.log.Info("subscribing to subject",
+		logging.Operation("nats.subscribe"),
+		logging.String("subject", subject),
+	)
 
 	_, err := b.nc.Subscribe(subject, func(msg *nats.Msg) {
 		b.log.Debug("message received", logging.String("subject", msg.Subject), logging.Int("bytes", len(msg.Data)))
 
-		if err := handler(ctx, msg.Subject, msg.Data); err != nil {
-			b.log.Error("message handler failed", logging.String("subject", msg.Subject), logging.Err(err))
+		msgCtx := natstrace.ContextFromMessage(ctx, msg)
+		if err := handler(msgCtx, msg.Subject, msg.Data); err != nil {
+			b.log.Error("message handler failed",
+				logging.Operation("nats.message.handle"),
+				logging.Attempt(1),
+				logging.Retryable(true),
+				logging.String("subject", msg.Subject),
+				logging.Err(err),
+			)
 			return
 		}
 
-		b.log.Info("message handled", logging.String("subject", msg.Subject))
+		b.log.Info("message handled",
+			logging.Operation("nats.message.handle"),
+			logging.String("subject", msg.Subject),
+		)
 	})
 	if err != nil {
 		return WrapSubscribeToNATSError(subject, err)
@@ -120,6 +156,7 @@ func (b *natsBroker) RunPullConsumer(ctx context.Context, cfg config.PullConsume
 	}
 
 	b.log.Info("starting pull consumer",
+		logging.Operation("nats.pull_consumer.start"),
 		logging.String("stream", cfg.Stream),
 		logging.String("subject", cfg.Subject),
 		logging.String("durable", cfg.Durable),
@@ -129,6 +166,7 @@ func (b *natsBroker) RunPullConsumer(ctx context.Context, cfg config.PullConsume
 	)
 	if cfg.Adaptive.Enabled {
 		b.log.Info("adaptive pull plans enabled",
+			logging.Operation("nats.pull_consumer.adaptive"),
 			logging.String("subject", cfg.Subject),
 			logging.Int("medium_pending", cfg.Adaptive.MediumPending),
 			logging.Int("high_pending", cfg.Adaptive.HighPending),

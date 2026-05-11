@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 	"user-service/config"
 	app "user-service/internal/application"
 
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 	userv1 "github.com/ofm-microservices/ofm-common/proto/user/v1"
+	otelgrpc "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,7 +35,10 @@ func NewServer(svc app.UserService, cfg config.GRPCConfig, log logging.Logger) (
 		return nil, ErrNilLogger
 	}
 
-	grpcSrv := grpc.NewServer(grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()))
+	grpcSrv := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()),
+	)
 	s := &server{
 		svc: svc,
 		cfg: cfg,
@@ -72,9 +77,18 @@ func (s *server) Shutdown(context.Context) error {
 // ExistsByUsername answers whether user-service already owns the supplied
 // username.
 func (s *server) ExistsByUsername(ctx context.Context, req *userv1.ExistsByUsernameRequest) (*userv1.ExistsByUsernameResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
 	exists, err := s.svc.ExistsByUsername(ctx, req.GetUsername())
 	if err != nil {
-		s.log.Error("exists by username failed", logging.Err(err))
+		log.Error("exists by username failed",
+			logging.Operation("grpc.user.exists_by_username"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("username", req.GetUsername()),
+			logging.Err(err),
+		)
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
@@ -83,9 +97,18 @@ func (s *server) ExistsByUsername(ctx context.Context, req *userv1.ExistsByUsern
 
 // ActivateUser marks a saga-created user profile as active.
 func (s *server) ActivateUser(ctx context.Context, req *userv1.ActivateUserRequest) (*userv1.ActivateUserResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
 	user, err := s.svc.ActivateUser(ctx, req.GetUserId())
 	if err != nil {
-		s.log.Error("activate user failed", logging.String("user_id", req.GetUserId()), logging.Err(err))
+		log.Error("activate user failed",
+			logging.Operation("grpc.user.activate"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("user_id", req.GetUserId()),
+			logging.Err(err),
+		)
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
@@ -94,8 +117,17 @@ func (s *server) ActivateUser(ctx context.Context, req *userv1.ActivateUserReque
 
 // DeactivateUser marks a saga-created user profile inactive as compensation.
 func (s *server) DeactivateUser(ctx context.Context, req *userv1.DeactivateUserRequest) (*userv1.DeactivateUserResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
 	if err := s.svc.DeactivateUser(ctx, req.GetUserId()); err != nil {
-		s.log.Error("deactivate user failed", logging.String("user_id", req.GetUserId()), logging.Err(err))
+		log.Error("deactivate user failed",
+			logging.Operation("grpc.user.deactivate"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("user_id", req.GetUserId()),
+			logging.Err(err),
+		)
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 

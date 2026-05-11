@@ -189,13 +189,13 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("propagates repository constructor validation", func() {
-		writeRepo, err := ProvideWriteRepo(nil, nil)
+		writeRepo, err := ProvideWriteRepo(nil, nil, logger)
 		Expect(writeRepo).To(BeNil())
 		Expect(err).To(MatchError("yugabyte db is nil"))
 	})
 
 	It("propagates read repository constructor validation", func() {
-		readRepo, err := ProvideReadRepo(nil)
+		readRepo, err := ProvideReadRepo(nil, logger)
 		Expect(readRepo).To(BeNil())
 		Expect(err).To(MatchError("redis client is nil"))
 	})

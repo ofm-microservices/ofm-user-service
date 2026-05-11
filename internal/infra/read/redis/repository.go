@@ -8,21 +8,26 @@ import (
 	domain "user-service/internal/domain"
 	"user-service/internal/infra/read/redis/mapper"
 
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 	"github.com/redis/go-redis/v9"
 )
 
 type repo struct {
 	rdb *redis.Client
+	log logging.Logger
 }
 
 // New constructs the Redis-backed user read-model repository.
-func New(rdb *redis.Client) (domain.UserReadRepository, error) {
+func New(rdb *redis.Client, log logging.Logger) (domain.UserReadRepository, error) {
 	if rdb == nil {
 		return nil, ErrNilRedisClient
 	}
+	if log == nil {
+		return nil, ErrNilLogger
+	}
 
-	return &repo{rdb: rdb}, nil
+	return &repo{rdb: rdb, log: log.With(logging.String("module", "redis-repository"))}, nil
 }
 
 func (r *repo) Upsert(ctx context.Context, user *domain.User) error {
@@ -32,6 +37,13 @@ func (r *repo) Upsert(ctx context.Context, user *domain.User) error {
 
 	if user == nil {
 		status = "error"
+		r.log.Error("upsert user failed",
+			logging.Operation("redis.user.upsert"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.Err(ErrNilUser),
+		)
 		return ErrNilUser
 	}
 
@@ -39,12 +51,28 @@ func (r *repo) Upsert(ctx context.Context, user *domain.User) error {
 	payload, err := json.Marshal(cache)
 	if err != nil {
 		status = "error"
+		r.log.Error("marshal user cache failed",
+			logging.Operation("redis.user.upsert"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("user_id", user.ID),
+			logging.Err(err),
+		)
 		return WrapMarshalUserCacheError(err)
 	}
 
 	key := UserCacheKey(user.ID)
 	if err := r.rdb.Set(ctx, key, payload, 0).Err(); err != nil {
 		status = "error"
+		r.log.Error("set user cache failed",
+			logging.Operation("redis.user.upsert"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("key", key),
+			logging.Err(err),
+		)
 		return WrapSetUserCacheError(key, err)
 	}
 
@@ -59,6 +87,14 @@ func (r *repo) DeleteByID(ctx context.Context, userID string) error {
 	key := UserCacheKey(userID)
 	if err := r.rdb.Del(ctx, key).Err(); err != nil {
 		status = "error"
+		r.log.Error("delete user cache failed",
+			logging.Operation("redis.user.delete_by_id"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("key", key),
+			logging.Err(err),
+		)
 		return WrapDeleteUserCacheError(key, err)
 	}
 

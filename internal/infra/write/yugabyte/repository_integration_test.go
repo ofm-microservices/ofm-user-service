@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
@@ -26,6 +27,7 @@ var (
 
 var _ = Describe("repository integration", Ordered, func() {
 	var repoAny user.UserRepository
+	var logger logging.Logger
 
 	BeforeAll(func() {
 		if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
@@ -58,17 +60,19 @@ var _ = Describe("repository integration", Ordered, func() {
 		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE users`)
 		Expect(err).NotTo(HaveOccurred())
 
+		logger, err = logging.New("user-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
 		var errNew error
-		repoAny, errNew = New(repoSuiteDB, NewPgErrorTranslator())
+		repoAny, errNew = New(repoSuiteDB, NewPgErrorTranslator(), logger)
 		Expect(errNew).NotTo(HaveOccurred())
 	})
 
 	It("validates constructor dependencies", func() {
-		repo, err := New(nil, NewPgErrorTranslator())
+		repo, err := New(nil, NewPgErrorTranslator(), logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilYugaByteDB))
 
-		repo, err = New(repoSuiteDB, nil)
+		repo, err = New(repoSuiteDB, nil, logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilDBErrorTranslator))
 	})

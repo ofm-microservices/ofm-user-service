@@ -78,6 +78,10 @@ func (c *fakeNATSConn) Publish(string, []byte) error {
 	return c.publishErr
 }
 
+func (c *fakeNATSConn) PublishMsg(*gnats.Msg) error {
+	return c.publishErr
+}
+
 func (c *fakeNATSConn) Subscribe(_ string, handler gnats.MsgHandler) (*gnats.Subscription, error) {
 	if c.subscribeErr != nil {
 		return nil, c.subscribeErr
