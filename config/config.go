@@ -1,9 +1,6 @@
 package config
 
-import (
-	"github.com/caarlos0/env/v11"
-	"github.com/joho/godotenv"
-)
+import "github.com/caarlos0/env/v11"
 
 // Config groups the full user-service runtime configuration.
 type Config struct {
@@ -18,8 +15,6 @@ type Config struct {
 
 // Load reads environment variables into Config and applies defaults.
 func Load() (*Config, error) {
-	_ = godotenv.Load()
-
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {
 		return nil, WrapParseEnvConfigError(err)
