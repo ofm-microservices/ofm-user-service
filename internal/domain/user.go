@@ -22,6 +22,7 @@ type User struct {
 	Username  string
 	FirstName string
 	LastName  string
+	AvatarID  string
 	IsActive  bool
 	Status    string
 	CreatedAt time.Time
@@ -34,6 +35,7 @@ type CreateUserParams struct {
 	Username  string
 	FirstName string
 	LastName  string
+	AvatarID  string
 }
 
 // UserRepository persists the user-service write model.
@@ -49,5 +51,6 @@ type UserRepository interface {
 // UserReadRepository persists the user-service read-model projection.
 type UserReadRepository interface {
 	Upsert(ctx context.Context, user *User) error
+	GetByID(ctx context.Context, userID string) (*User, error)
 	DeleteByID(ctx context.Context, userID string) error
 }

@@ -90,7 +90,7 @@ var _ = Describe("repository integration", func() {
 
 		Expect(repoAny.Upsert(context.Background(), u)).To(Succeed())
 
-		payload, err := redisSuiteClient.Get(context.Background(), UserCacheKey("user-1")).Bytes()
+		payload, err := redisSuiteClient.Get(context.Background(), UserPreviewCacheKey("user-1")).Bytes()
 		Expect(err).NotTo(HaveOccurred())
 
 		var cached readmodel.UserCache
@@ -99,7 +99,7 @@ var _ = Describe("repository integration", func() {
 		Expect(cached.Username).To(Equal("alex"))
 
 		Expect(repoAny.DeleteByID(context.Background(), "user-1")).To(Succeed())
-		Expect(redisSuiteClient.Exists(context.Background(), UserCacheKey("user-1")).Val()).To(Equal(int64(0)))
+		Expect(redisSuiteClient.Exists(context.Background(), UserPreviewCacheKey("user-1")).Val()).To(Equal(int64(0)))
 	})
 
 	It("rejects nil users", func() {
@@ -110,7 +110,7 @@ var _ = Describe("repository integration", func() {
 	})
 
 	It("builds stable cache keys", func() {
-		Expect(UserCacheKey("user-1")).To(Equal("user:user-1"))
+		Expect(UserPreviewCacheKey("user-1")).To(Equal("user:preview:user-1"))
 	})
 })
 

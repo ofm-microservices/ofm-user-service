@@ -22,6 +22,7 @@ type server struct {
 	svc      app.UserService
 	cfg      config.GRPCConfig
 	log      logging.Logger
+	mapr     *userMapper
 	srv      *grpc.Server
 	listener net.Listener
 }
@@ -43,6 +44,7 @@ func NewServer(svc app.UserService, cfg config.GRPCConfig, log logging.Logger) (
 		svc: svc,
 		cfg: cfg,
 		log: log.With(logging.String("module", "grpc-server")),
+		mapr: newUserMapper(),
 		srv: grpcSrv,
 	}
 	userv1.RegisterUserQueryServiceServer(grpcSrv, s)
@@ -132,4 +134,24 @@ func (s *server) DeactivateUser(ctx context.Context, req *userv1.DeactivateUserR
 	}
 
 	return &userv1.DeactivateUserResponse{UserId: req.GetUserId(), Status: "registration_failed"}, nil
+}
+
+// GetUserPreviewByID returns the cached or lazily loaded user preview.
+func (s *server) GetUserPreviewByID(ctx context.Context, req *userv1.GetUserPreviewByIDRequest) (*userv1.GetUserPreviewByIDResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	user, err := s.svc.GetUserPreviewByID(ctx, req.GetUserId())
+	if err != nil {
+		log.Error("get user preview failed",
+			logging.Operation("grpc.user.preview"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("user_id", req.GetUserId()),
+			logging.Err(err),
+		)
+		return nil, status.Error(codes.Internal, "internal server error")
+	}
+
+	return s.mapr.ToPreviewResponse(user), nil
 }
