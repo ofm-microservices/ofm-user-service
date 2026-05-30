@@ -410,6 +410,9 @@ func (s *stubWriteRepo) DeleteByID(context.Context, string) error     { return n
 type stubReadRepo struct{}
 
 func (s *stubReadRepo) Upsert(context.Context, *user.User) error { return nil }
+func (s *stubReadRepo) GetByID(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
 func (s *stubReadRepo) DeleteByID(context.Context, string) error { return nil }
 
 type stubUserService struct{}
@@ -423,6 +426,9 @@ func (s *stubUserService) ActivateUser(context.Context, string) (*user.User, err
 }
 func (s *stubUserService) DeactivateUser(context.Context, string) error { return nil }
 func (s *stubUserService) DeleteUser(context.Context, string) error     { return nil }
+func (s *stubUserService) GetUserPreviewByID(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
 
 type stubEventBroker struct{}
 

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"strings"
 	domain "user-service/internal/domain"
@@ -45,6 +46,7 @@ func (s *userService) CreateUser(ctx context.Context, userID, username, firstNam
 		Username:  username,
 		FirstName: firstName,
 		LastName:  lastName,
+		AvatarID:  "",
 	})
 	if err != nil {
 		s.log.Error("failed to create user", logging.String("user_id", userID), logging.Err(err))
@@ -133,4 +135,30 @@ func (s *userService) ExistsByUsername(ctx context.Context, username string) (bo
 	}
 
 	return s.repo.ExistsByUsername(ctx, strings.TrimSpace(username))
+}
+
+func (s *userService) GetUserPreviewByID(ctx context.Context, userID string) (*domain.User, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, domain.ErrInvalidUserID
+	}
+
+	if cached, err := s.readRepo.GetByID(ctx, userID); err == nil && cached != nil {
+		return cached, nil
+	} else if err != nil && !errors.Is(err, domain.ErrUserNotFound) {
+		s.log.Error("failed to get user preview from cache", logging.String("user_id", userID), logging.Err(err))
+	}
+
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		s.log.Error("failed to get user preview from database", logging.String("user_id", userID), logging.Err(err))
+		return nil, err
+	}
+
+	if err := s.readRepo.Upsert(ctx, user); err != nil {
+		s.log.Error("failed to upsert user preview read model", logging.String("user_id", userID), logging.Err(err))
+		return nil, err
+	}
+
+	return user, nil
 }

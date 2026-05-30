@@ -14,6 +14,7 @@ type UserService interface {
 	ActivateUser(ctx context.Context, userID string) (*domain.User, error)
 	DeactivateUser(ctx context.Context, userID string) error
 	DeleteUser(ctx context.Context, userID string) error
+	GetUserPreviewByID(ctx context.Context, userID string) (*domain.User, error)
 }
 
 // UserRepository aliases the write-model persistence contract consumed by the

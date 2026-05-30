@@ -31,7 +31,7 @@ var _ = Describe("repository unit", func() {
 		repoAny, err = New(client, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(repoAny.Upsert(context.Background(), nil)).To(MatchError(ErrNilUser))
-		Expect(UserCacheKey("user-1")).To(Equal("user:user-1"))
+		Expect(UserPreviewCacheKey("user-1")).To(Equal("user:preview:user-1"))
 	})
 
 	It("wraps set and delete failures", func() {

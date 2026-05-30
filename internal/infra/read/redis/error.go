@@ -25,3 +25,13 @@ func WrapSetUserCacheError(key string, err error) error {
 func WrapDeleteUserCacheError(key string, err error) error {
 	return fmt.Errorf("delete user cache by key %q: %w", key, err)
 }
+
+// WrapGetUserCacheError annotates Redis read failures for the user cache.
+func WrapGetUserCacheError(key string, err error) error {
+	return fmt.Errorf("get user cache by key %q: %w", key, err)
+}
+
+// WrapUnmarshalUserCacheError annotates cache decoding failures.
+func WrapUnmarshalUserCacheError(err error) error {
+	return fmt.Errorf("unmarshal user cache: %w", err)
+}
