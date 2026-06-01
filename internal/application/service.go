@@ -11,6 +11,8 @@ import (
 type userService struct {
 	repo     UserRepository
 	readRepo UserReadRepository
+	files    FileURLClient
+	pub      DetailedUserPublisher
 	log      Logger
 }
 
@@ -29,6 +31,36 @@ func New(repo UserRepository, readRepo UserReadRepository, log Logger) (UserServ
 	return &userService{
 		repo:     repo,
 		readRepo: readRepo,
+		files:    noopFileURLClient{},
+		pub:      noopDetailedUserPublisher{},
+		log:      log.With(logging.String("module", "application")),
+	}, nil
+}
+
+// NewDetailed constructs the user application service with outbound
+// collaborators required by the detailed public user lookup flow.
+func NewDetailed(repo UserRepository, readRepo UserReadRepository, files FileURLClient, pub DetailedUserPublisher, log Logger) (UserService, error) {
+	if repo == nil {
+		return nil, ErrNilUserRepository
+	}
+	if readRepo == nil {
+		return nil, ErrNilUserReadRepository
+	}
+	if files == nil {
+		return nil, ErrNilFileURLClient
+	}
+	if pub == nil {
+		return nil, ErrNilDetailedUserPublisher
+	}
+	if log == nil {
+		return nil, ErrNilLogger
+	}
+
+	return &userService{
+		repo:     repo,
+		readRepo: readRepo,
+		files:    files,
+		pub:      pub,
 		log:      log.With(logging.String("module", "application")),
 	}, nil
 }
@@ -161,4 +193,65 @@ func (s *userService) GetUserPreviewByID(ctx context.Context, userID string) (*d
 	}
 
 	return user, nil
+}
+
+func (s *userService) GetDetailedUserByUsername(ctx context.Context, username string) (*domain.User, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, domain.ErrInvalidUsername
+	}
+
+	if cached, err := s.readRepo.GetByUsername(ctx, username); err == nil && cached != nil {
+		return cached, nil
+	} else if err != nil && !errors.Is(err, domain.ErrUserNotFound) {
+		s.log.Error("failed to get detailed user from cache", logging.String("username", username), logging.Err(err))
+	}
+
+	user, err := s.repo.GetByUsername(ctx, username)
+	if err != nil {
+		s.log.Error("failed to get detailed user from database", logging.String("username", username), logging.Err(err))
+		return nil, err
+	}
+
+	if avatarID := strings.TrimSpace(user.AvatarID); avatarID != "" {
+		if avatarURL, err := s.files.GetFileURL(ctx, avatarID); err == nil {
+			user.AvatarURL = avatarURL
+		} else {
+			s.log.Error("failed to resolve detailed user avatar url",
+				logging.String("username", username),
+				logging.String("avatar_id", avatarID),
+				logging.Err(err),
+			)
+		}
+	}
+	if user.DisplayName == "" {
+		user.DisplayName = domain.DisplayName(user.FirstName, user.LastName)
+	}
+
+	if err := s.readRepo.UpsertByUsername(ctx, user); err != nil {
+		s.log.Error("failed to upsert detailed user read model",
+			logging.String("username", username),
+			logging.Err(err),
+		)
+		return nil, err
+	}
+
+	if err := s.pub.PublishDetailedUserRequested(ctx, user); err != nil {
+		s.log.Error("failed to publish detailed user projection request",
+			logging.String("username", username),
+			logging.Err(err),
+		)
+	}
+
+	return user, nil
+}
+
+type noopFileURLClient struct{}
+
+func (noopFileURLClient) GetFileURL(context.Context, string) (string, error) { return "", nil }
+
+type noopDetailedUserPublisher struct{}
+
+func (noopDetailedUserPublisher) PublishDetailedUserRequested(context.Context, *domain.User) error {
+	return nil
 }

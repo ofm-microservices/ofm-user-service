@@ -10,6 +10,7 @@ var (
 	ErrNilLogger                    = errors.New("logger is nil")
 	ErrNilBroker                    = errors.New("event broker is nil")
 	ErrNilUserService               = errors.New("user service is nil")
+	ErrNilUserReadRepository        = errors.New("user read repository is nil")
 	ErrNilFailureReasonResolver     = errors.New("failure reason resolver is nil")
 	ErrEmptyStreamName              = errors.New("stream name is empty")
 	ErrEmptySubject                 = errors.New("subject is empty")
@@ -23,6 +24,7 @@ var (
 	ErrInvalidAdaptiveCheckInterval = errors.New("adaptive check interval must be greater than zero")
 	ErrInvalidAdaptiveThresholds    = errors.New("adaptive thresholds must satisfy: high > medium >= 0")
 	ErrInvalidAdaptivePlan          = errors.New("adaptive plan batch size and max wait must be greater than zero")
+	ErrInvalidDetailedUserPayload   = errors.New("invalid detailed user payload")
 )
 
 // WrapConnectToNATSError annotates low-level NATS connection failures.
@@ -82,4 +84,28 @@ func WrapMarshalCreateUserResultError(err error) error {
 // failures.
 func WrapMarshalDeleteUserResultError(err error) error {
 	return fmt.Errorf("marshal delete user result: %w", err)
+}
+
+// WrapMarshalDetailedUserRequestedError annotates detailed-user request encode
+// failures.
+func WrapMarshalDetailedUserRequestedError(err error) error {
+	return fmt.Errorf("marshal detailed user requested event: %w", err)
+}
+
+// WrapUnmarshalDetailedUserRequestedError annotates detailed-user request
+// decode failures.
+func WrapUnmarshalDetailedUserRequestedError(err error) error {
+	return fmt.Errorf("unmarshal detailed user requested event: %w", err)
+}
+
+// WrapMarshalDetailedUserProjectionError annotates detailed-user projection
+// encode failures.
+func WrapMarshalDetailedUserProjectionError(err error) error {
+	return fmt.Errorf("marshal detailed user projection event: %w", err)
+}
+
+// WrapUnmarshalDetailedUserProjectionError annotates detailed-user projection
+// decode failures.
+func WrapUnmarshalDetailedUserProjectionError(err error) error {
+	return fmt.Errorf("unmarshal detailed user projection event: %w", err)
 }

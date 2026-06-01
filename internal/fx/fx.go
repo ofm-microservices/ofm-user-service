@@ -10,6 +10,7 @@ var Module = fx.Options(
 	MetricsModule,
 	AppModule,
 	StorageModule,
+	OutboundModule,
 	MessagingModule,
 	RepoModule,
 	ServiceModule,

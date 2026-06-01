@@ -52,6 +52,7 @@ func (r *repo) Create(ctx context.Context, params domain.CreateUserParams) (*dom
 		&userRow.FirstName,
 		&userRow.LastName,
 		&userRow.AvatarID,
+		&userRow.About,
 		&userRow.IsActive,
 		&userRow.Status,
 		&userRow.CreatedAt,
@@ -84,6 +85,7 @@ func (r *repo) GetByID(ctx context.Context, userID string) (*domain.User, error)
 		&userRow.FirstName,
 		&userRow.LastName,
 		&userRow.AvatarID,
+		&userRow.About,
 		&userRow.IsActive,
 		&userRow.Status,
 		&userRow.CreatedAt,
@@ -96,6 +98,41 @@ func (r *repo) GetByID(ctx context.Context, userID string) (*domain.User, error)
 			logging.Retryable(false),
 			logging.DurationMS(time.Since(started)),
 			logging.String("user_id", userID),
+			logging.Err(err),
+		)
+		return nil, r.translator.TranslateFindUserError(err)
+	}
+
+	return mapper.MapUserRowToDomain(userRow), nil
+}
+
+func (r *repo) GetByUsername(ctx context.Context, username string) (*domain.User, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "get_by_username", "users", status, time.Since(started))
+	}()
+
+	var userRow model.UserRow
+	if err := r.db.QueryRowContext(ctx, getUserByUsername, username).Scan(
+		&userRow.ID,
+		&userRow.Username,
+		&userRow.FirstName,
+		&userRow.LastName,
+		&userRow.AvatarID,
+		&userRow.About,
+		&userRow.IsActive,
+		&userRow.Status,
+		&userRow.CreatedAt,
+		&userRow.UpdatedAt,
+	); err != nil {
+		status = "error"
+		r.log.Error("get user by username failed",
+			logging.Operation("db.user.get_by_username"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("username", username),
 			logging.Err(err),
 		)
 		return nil, r.translator.TranslateFindUserError(err)
@@ -140,6 +177,7 @@ func (r *repo) ActivateByID(ctx context.Context, userID string) (*domain.User, e
 		&userRow.FirstName,
 		&userRow.LastName,
 		&userRow.AvatarID,
+		&userRow.About,
 		&userRow.IsActive,
 		&userRow.Status,
 		&userRow.CreatedAt,

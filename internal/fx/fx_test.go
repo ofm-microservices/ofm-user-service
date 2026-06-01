@@ -183,7 +183,7 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("constructs the application service", func() {
-		svc, err := ProvideUserService(&stubWriteRepo{}, &stubReadRepo{}, logger)
+		svc, err := ProvideUserService(&stubWriteRepo{}, &stubReadRepo{}, &stubFileClient{}, &stubDetailedUserPublisher{}, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(svc).NotTo(BeNil())
 	})
@@ -400,6 +400,9 @@ func (s *stubWriteRepo) Create(context.Context, user.CreateUserParams) (*user.Us
 func (s *stubWriteRepo) GetByID(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
 }
+func (s *stubWriteRepo) GetByUsername(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
 func (s *stubWriteRepo) ExistsByUsername(context.Context, string) (bool, error) { return false, nil }
 func (s *stubWriteRepo) ActivateByID(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
@@ -413,7 +416,22 @@ func (s *stubReadRepo) Upsert(context.Context, *user.User) error { return nil }
 func (s *stubReadRepo) GetByID(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
 }
-func (s *stubReadRepo) DeleteByID(context.Context, string) error { return nil }
+func (s *stubReadRepo) DeleteByID(context.Context, string) error           { return nil }
+func (s *stubReadRepo) UpsertByUsername(context.Context, *user.User) error { return nil }
+func (s *stubReadRepo) GetByUsername(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubReadRepo) DeleteByUsername(context.Context, string) error { return nil }
+
+type stubFileClient struct{}
+
+func (s *stubFileClient) GetFileURL(context.Context, string) (string, error) { return "", nil }
+
+type stubDetailedUserPublisher struct{}
+
+func (s *stubDetailedUserPublisher) PublishDetailedUserRequested(context.Context, *user.User) error {
+	return nil
+}
 
 type stubUserService struct{}
 
@@ -427,6 +445,9 @@ func (s *stubUserService) ActivateUser(context.Context, string) (*user.User, err
 func (s *stubUserService) DeactivateUser(context.Context, string) error { return nil }
 func (s *stubUserService) DeleteUser(context.Context, string) error     { return nil }
 func (s *stubUserService) GetUserPreviewByID(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubUserService) GetDetailedUserByUsername(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
 }
 
@@ -452,10 +473,12 @@ func (s *registrationSagaSubscriberStub) Subscribe(context.Context) error {
 }
 
 var (
-	_ user.UserRepository     = (*stubWriteRepo)(nil)
-	_ user.UserReadRepository = (*stubReadRepo)(nil)
-	_ app.UserService         = (*stubUserService)(nil)
-	_ eventbroker.EventBroker = (*stubEventBroker)(nil)
+	_ user.UserRepository       = (*stubWriteRepo)(nil)
+	_ user.UserReadRepository   = (*stubReadRepo)(nil)
+	_ app.UserService           = (*stubUserService)(nil)
+	_ app.FileURLClient         = (*stubFileClient)(nil)
+	_ app.DetailedUserPublisher = (*stubDetailedUserPublisher)(nil)
+	_ eventbroker.EventBroker   = (*stubEventBroker)(nil)
 )
 
 func startFXNATSContainer(ctx context.Context) (testcontainers.Container, config.NATSConfig) {
@@ -476,22 +499,32 @@ func startFXNATSContainer(ctx context.Context) (testcontainers.Container, config
 	Expect(err).NotTo(HaveOccurred())
 
 	return container, config.NATSConfig{
-		URL:                         "nats://" + host + ":" + port.Port(),
-		UserEventsStream:            "USER_EVENTS",
-		UserCreatedSubject:          "user.created",
-		SagaCommandsStream:          "SAGA_USER_COMMANDS",
-		SagaCreateUserSubject:       "saga.user.create",
-		SagaDeleteUserSubject:       "saga.user.delete",
-		SagaCreateUserResultSubject: "saga.user.create.result",
-		SagaDeleteUserResultSubject: "saga.user.delete.result",
-		SagaCreateUserDurable:       "user_service_saga_create",
-		SagaDeleteUserDurable:       "user_service_saga_delete",
-		SagaBatchSize:               1,
-		SagaMaxWait:                 time.Millisecond,
-		SagaWorkers:                 1,
-		SagaQueueSize:               1,
-		SagaAckWait:                 time.Second,
-		SagaMaxDeliver:              1,
+		URL:                              "nats://" + host + ":" + port.Port(),
+		UserEventsStream:                 "USER_EVENTS",
+		UserCreatedSubject:               "user.created",
+		SagaCommandsStream:               "SAGA_USER_COMMANDS",
+		SagaCreateUserSubject:            "saga.user.create",
+		SagaDeleteUserSubject:            "saga.user.delete",
+		SagaCreateUserResultSubject:      "saga.user.create.result",
+		SagaDeleteUserResultSubject:      "saga.user.delete.result",
+		SagaCreateUserDurable:            "user_service_saga_create",
+		SagaDeleteUserDurable:            "user_service_saga_delete",
+		SagaBatchSize:                    1,
+		SagaMaxWait:                      time.Millisecond,
+		SagaWorkers:                      1,
+		SagaQueueSize:                    1,
+		SagaAckWait:                      time.Second,
+		SagaMaxDeliver:                   1,
+		UserDetailedStream:               "USER_DETAILED",
+		UserDetailedRequestedSubject:     "user.detailed.requested",
+		UserDetailedProjectionSubject:    "user.detailed.projection.requested",
+		UserDetailedProjectionDurable:    "user_service_user_detailed_projection",
+		UserDetailedProjectionBatchSize:  1,
+		UserDetailedProjectionMaxWait:    time.Millisecond,
+		UserDetailedProjectionWorkers:    1,
+		UserDetailedProjectionQueueSize:  1,
+		UserDetailedProjectionAckWait:    time.Second,
+		UserDetailedProjectionMaxDeliver: 1,
 	}
 }
 

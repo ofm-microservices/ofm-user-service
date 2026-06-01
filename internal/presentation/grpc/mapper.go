@@ -2,7 +2,6 @@ package grpc
 
 import (
 	domain "user-service/internal/domain"
-	"user-service/internal/infra/read/redis/mapper"
 
 	userv1 "github.com/ofm-microservices/ofm-common/proto/user/v1"
 )
@@ -22,8 +21,30 @@ func (m *userMapper) ToPreviewResponse(user *domain.User) *userv1.GetUserPreview
 		User: &userv1.UserPreview{
 			UserId:      user.ID,
 			Username:    user.Username,
-			DisplayName: mapper.DisplayName(user.FirstName, user.LastName),
+			DisplayName: domain.DisplayName(user.FirstName, user.LastName),
 			AvatarId:    user.AvatarID,
+		},
+	}
+}
+
+func (m *userMapper) ToDetailedResponse(user *domain.User) *userv1.GetDetailedUserByUsernameResponse {
+	if user == nil {
+		return &userv1.GetDetailedUserByUsernameResponse{}
+	}
+
+	displayName := user.DisplayName
+	if displayName == "" {
+		displayName = domain.DisplayName(user.FirstName, user.LastName)
+	}
+
+	return &userv1.GetDetailedUserByUsernameResponse{
+		User: &userv1.DetailedUser{
+			UserId:      user.ID,
+			Username:    user.Username,
+			DisplayName: displayName,
+			AvatarId:    user.AvatarID,
+			AvatarUrl:   user.AvatarURL,
+			About:       user.About,
 		},
 	}
 }
