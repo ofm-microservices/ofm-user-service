@@ -9,6 +9,7 @@ type Config struct {
 	GRPC    GRPCConfig
 	Metrics MetricsConfig
 	Tracing TracingConfig
+	File    FileServiceConfig
 	Redis   RedisConfig
 	NATS    NATSConfig
 }

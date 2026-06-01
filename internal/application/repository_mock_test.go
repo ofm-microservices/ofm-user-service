@@ -129,6 +129,21 @@ func (mr *MockUserRepositoryMockRecorder) GetByID(ctx, userID any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockUserRepository)(nil).GetByID), ctx, userID)
 }
 
+// GetByUsername mocks base method.
+func (m *MockUserRepository) GetByUsername(ctx context.Context, username string) (*user.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByUsername", ctx, username)
+	ret0, _ := ret[0].(*user.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByUsername indicates an expected call of GetByUsername.
+func (mr *MockUserRepositoryMockRecorder) GetByUsername(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUsername", reflect.TypeOf((*MockUserRepository)(nil).GetByUsername), ctx, username)
+}
+
 // MockUserReadRepository is a mock of UserReadRepository interface.
 type MockUserReadRepository struct {
 	ctrl     *gomock.Controller
@@ -167,6 +182,20 @@ func (mr *MockUserReadRepositoryMockRecorder) DeleteByID(ctx, userID any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteByID", reflect.TypeOf((*MockUserReadRepository)(nil).DeleteByID), ctx, userID)
 }
 
+// DeleteByUsername mocks base method.
+func (m *MockUserReadRepository) DeleteByUsername(ctx context.Context, username string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteByUsername", ctx, username)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteByUsername indicates an expected call of DeleteByUsername.
+func (mr *MockUserReadRepositoryMockRecorder) DeleteByUsername(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteByUsername", reflect.TypeOf((*MockUserReadRepository)(nil).DeleteByUsername), ctx, username)
+}
+
 // GetByID mocks base method.
 func (m *MockUserReadRepository) GetByID(ctx context.Context, userID string) (*user.User, error) {
 	m.ctrl.T.Helper()
@@ -182,6 +211,21 @@ func (mr *MockUserReadRepositoryMockRecorder) GetByID(ctx, userID any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockUserReadRepository)(nil).GetByID), ctx, userID)
 }
 
+// GetByUsername mocks base method.
+func (m *MockUserReadRepository) GetByUsername(ctx context.Context, username string) (*user.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByUsername", ctx, username)
+	ret0, _ := ret[0].(*user.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByUsername indicates an expected call of GetByUsername.
+func (mr *MockUserReadRepositoryMockRecorder) GetByUsername(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUsername", reflect.TypeOf((*MockUserReadRepository)(nil).GetByUsername), ctx, username)
+}
+
 // Upsert mocks base method.
 func (m *MockUserReadRepository) Upsert(ctx context.Context, arg1 *user.User) error {
 	m.ctrl.T.Helper()
@@ -194,4 +238,18 @@ func (m *MockUserReadRepository) Upsert(ctx context.Context, arg1 *user.User) er
 func (mr *MockUserReadRepositoryMockRecorder) Upsert(ctx, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockUserReadRepository)(nil).Upsert), ctx, arg1)
+}
+
+// UpsertByUsername mocks base method.
+func (m *MockUserReadRepository) UpsertByUsername(ctx context.Context, arg1 *user.User) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertByUsername", ctx, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertByUsername indicates an expected call of UpsertByUsername.
+func (mr *MockUserReadRepositoryMockRecorder) UpsertByUsername(ctx, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertByUsername", reflect.TypeOf((*MockUserReadRepository)(nil).UpsertByUsername), ctx, arg1)
 }

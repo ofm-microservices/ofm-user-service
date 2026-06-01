@@ -13,6 +13,7 @@ func MapUserRowToDomain(userRow model.UserRow) *domain.User {
 		FirstName: userRow.FirstName,
 		LastName:  userRow.LastName,
 		AvatarID:  userRow.AvatarID,
+		About:     userRow.About,
 		IsActive:  userRow.IsActive,
 		Status:    userRow.Status,
 		CreatedAt: userRow.CreatedAt,

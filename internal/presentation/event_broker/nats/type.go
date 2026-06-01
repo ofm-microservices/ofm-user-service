@@ -14,6 +14,18 @@ type RegistrationSagaSubscriber interface {
 	Subscribe(ctx context.Context) error
 }
 
+// DetailedUserProjectionRelay republished detailed-user request events to the
+// durable projection subject.
+type DetailedUserProjectionRelay interface {
+	Start(ctx context.Context) error
+}
+
+// DetailedUserProjectionSubscriber consumes detailed-user projection events
+// and updates the Redis read model.
+type DetailedUserProjectionSubscriber interface {
+	Start(ctx context.Context) error
+}
+
 // RegistrationSagaMessageMapper translates user registration results into NATS
 // payloads consumed by the registration saga.
 type RegistrationSagaMessageMapper interface {

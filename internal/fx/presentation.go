@@ -5,6 +5,7 @@ import (
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"user-service/config"
 	app "user-service/internal/application"
+	user "user-service/internal/domain"
 	eventbroker "user-service/internal/presentation/event_broker"
 	events "user-service/internal/presentation/event_broker/nats"
 	grpcserver "user-service/internal/presentation/grpc"
@@ -18,10 +19,14 @@ var PresentationModule = fx.Options(
 	fx.Provide(
 		events.NewDomainFailureReasonResolver,
 		ProvideRegistrationSagaSubscriber,
+		ProvideDetailedUserProjectionRelay,
+		ProvideDetailedUserProjectionSubscriber,
 		ProvideGRPCServer,
 	),
 	fx.Invoke(
 		InvokeSubscribeRegistrationSaga,
+		InvokeStartDetailedUserProjectionRelay,
+		InvokeStartDetailedUserProjectionSubscriber,
 		InvokeRunGRPCServer,
 	),
 )
@@ -36,6 +41,27 @@ func ProvideRegistrationSagaSubscriber(
 	lg logging.Logger,
 ) (events.RegistrationSagaSubscriber, error) {
 	return events.NewRegistrationSagaSubscriber(broker, service, cfg.NATS, resolver, lg)
+}
+
+// ProvideDetailedUserProjectionRelay constructs the relay that forwards
+// detailed-user request events into the durable projection subject.
+func ProvideDetailedUserProjectionRelay(
+	broker eventbroker.EventBroker,
+	cfg *config.Config,
+	lg logging.Logger,
+) (events.DetailedUserProjectionRelay, error) {
+	return events.NewDetailedUserProjectionRelay(broker, cfg.NATS, lg)
+}
+
+// ProvideDetailedUserProjectionSubscriber constructs the Redis projection
+// worker for detailed user data.
+func ProvideDetailedUserProjectionSubscriber(
+	broker eventbroker.EventBroker,
+	read user.UserReadRepository,
+	cfg *config.Config,
+	lg logging.Logger,
+) (events.DetailedUserProjectionSubscriber, error) {
+	return events.NewDetailedUserProjectionSubscriber(broker, read, cfg.NATS, lg)
 }
 
 // ProvideGRPCServer constructs the gRPC query server exposed by user-service.
@@ -94,6 +120,58 @@ func InvokeRunGRPCServer(lc fx.Lifecycle, srv grpcserver.Server) {
 		},
 		OnStop: func(ctx context.Context) error {
 			return srv.Shutdown(ctx)
+		},
+	})
+}
+
+// InvokeStartDetailedUserProjectionRelay starts the detailed-user request
+// relay.
+func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay events.DetailedUserProjectionRelay) {
+	var cancel context.CancelFunc
+
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			runCtx, runCancel := context.WithCancel(context.Background())
+			cancel = runCancel
+
+			go func() {
+				if err := relay.Start(runCtx); err != nil {
+					panic(err)
+				}
+			}()
+			return nil
+		},
+		OnStop: func(context.Context) error {
+			if cancel != nil {
+				cancel()
+			}
+			return nil
+		},
+	})
+}
+
+// InvokeStartDetailedUserProjectionSubscriber starts the detailed-user Redis
+// projection worker.
+func InvokeStartDetailedUserProjectionSubscriber(lc fx.Lifecycle, subscriber events.DetailedUserProjectionSubscriber) {
+	var cancel context.CancelFunc
+
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			runCtx, runCancel := context.WithCancel(context.Background())
+			cancel = runCancel
+
+			go func() {
+				if err := subscriber.Start(runCtx); err != nil {
+					panic(err)
+				}
+			}()
+			return nil
+		},
+		OnStop: func(context.Context) error {
+			if cancel != nil {
+				cancel()
+			}
+			return nil
 		},
 	})
 }

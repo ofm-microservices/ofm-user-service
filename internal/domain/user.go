@@ -18,15 +18,18 @@ const (
 
 // User is the write-model entity owned by user-service.
 type User struct {
-	ID        string
-	Username  string
-	FirstName string
-	LastName  string
-	AvatarID  string
-	IsActive  bool
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          string
+	Username    string
+	DisplayName string
+	FirstName   string
+	LastName    string
+	AvatarID    string
+	AvatarURL   string
+	About       string
+	IsActive    bool
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // CreateUserParams contains the input required to create a new user profile.
@@ -42,6 +45,7 @@ type CreateUserParams struct {
 type UserRepository interface {
 	Create(ctx context.Context, params CreateUserParams) (*User, error)
 	GetByID(ctx context.Context, userID string) (*User, error)
+	GetByUsername(ctx context.Context, username string) (*User, error)
 	ExistsByUsername(ctx context.Context, username string) (bool, error)
 	ActivateByID(ctx context.Context, userID string) (*User, error)
 	DeactivateByID(ctx context.Context, userID string) error
@@ -53,4 +57,7 @@ type UserReadRepository interface {
 	Upsert(ctx context.Context, user *User) error
 	GetByID(ctx context.Context, userID string) (*User, error)
 	DeleteByID(ctx context.Context, userID string) error
+	UpsertByUsername(ctx context.Context, user *User) error
+	GetByUsername(ctx context.Context, username string) (*User, error)
+	DeleteByUsername(ctx context.Context, username string) error
 }

@@ -90,9 +90,26 @@ func EnsureStream(cfg config.NATSConfig, log logging.Logger) error {
 		}
 	}
 
+	detailedStreamCfg := &nats.StreamConfig{
+		Name:      cfg.UserDetailedStream,
+		Subjects:  []string{cfg.UserDetailedProjectionSubject},
+		Storage:   nats.FileStorage,
+		Retention: nats.LimitsPolicy,
+		Replicas:  1,
+		MaxAge:    7 * 24 * time.Hour,
+	}
+
+	_, err = js.AddStream(detailedStreamCfg)
+	if err != nil {
+		if _, updateErr := js.UpdateStream(detailedStreamCfg); updateErr != nil {
+			return WrapEnsureStreamError(detailedStreamCfg.Name, err, updateErr)
+		}
+	}
+
 	lg.Info("jetstream streams ensured",
 		logging.String("user_events_stream", streamCfg.Name),
 		logging.String("saga_commands_stream", sagaStreamCfg.Name),
+		logging.String("user_detailed_stream", detailedStreamCfg.Name),
 	)
 	return nil
 }

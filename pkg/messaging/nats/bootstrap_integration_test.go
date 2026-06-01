@@ -149,6 +149,12 @@ var _ = Describe("bootstrap integration", func() {
 			bootstrapJSCfg.SagaCreateUserSubject,
 			bootstrapJSCfg.SagaDeleteUserSubject,
 		))
+
+		detailedUserInfo, err := js.StreamInfo(bootstrapJSCfg.UserDetailedStream)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(detailedUserInfo.Config.Subjects).To(ContainElements(
+			bootstrapJSCfg.UserDetailedProjectionSubject,
+		))
 	})
 
 	It("requires a logger", func() {
@@ -194,31 +200,43 @@ var _ = Describe("bootstrap unit", func() {
 		}
 
 		Expect(EnsureStream(config.NATSConfig{
-			UserEventsStream:            "USER_EVENTS",
-			UserCreatedSubject:          "user.created",
-			SagaCreateUserResultSubject: "saga.user.create.result",
-			SagaDeleteUserResultSubject: "saga.user.delete.result",
-			SagaCommandsStream:          "SAGA_USER_COMMANDS",
-			SagaCreateUserSubject:       "saga.user.create",
-			SagaDeleteUserSubject:       "saga.user.delete",
+			UserEventsStream:                 "USER_EVENTS",
+			UserCreatedSubject:               "user.created",
+			SagaCreateUserResultSubject:      "saga.user.create.result",
+			SagaDeleteUserResultSubject:      "saga.user.delete.result",
+			SagaCommandsStream:               "SAGA_USER_COMMANDS",
+			SagaCreateUserSubject:            "saga.user.create",
+			SagaDeleteUserSubject:            "saga.user.delete",
+			UserDetailedStream:               "USER_DETAILED",
+			UserDetailedRequestedSubject:     "user.detailed.requested",
+			UserDetailedProjectionSubject:    "user.detailed.projection.requested",
+			UserDetailedProjectionDurable:    "user_service_user_detailed_projection",
+			UserDetailedProjectionBatchSize:  1,
+			UserDetailedProjectionMaxWait:    time.Millisecond,
+			UserDetailedProjectionWorkers:    1,
+			UserDetailedProjectionQueueSize:  1,
+			UserDetailedProjectionAckWait:    time.Second,
+			UserDetailedProjectionMaxDeliver: 1,
 		}, logger)).To(Succeed())
 
-		Expect(js.added).To(Equal([]string{"USER_EVENTS", "SAGA_USER_COMMANDS"}))
+		Expect(js.added).To(Equal([]string{"USER_EVENTS", "SAGA_USER_COMMANDS", "USER_DETAILED"}))
 		Expect(conn.closed).To(BeTrue())
 	})
 
 	It("updates streams when add reports an existing stream", func() {
-		js := &fakeJetStream{addErrors: []error{errors.New("exists"), errors.New("exists")}}
+		js := &fakeJetStream{addErrors: []error{errors.New("exists"), errors.New("exists"), errors.New("exists")}}
 		connectBootstrap = func(config.NATSConfig) (bootstrapConn, error) {
 			return &fakeBootstrapConn{js: js}, nil
 		}
 
 		Expect(EnsureStream(config.NATSConfig{
-			UserEventsStream:   "USER_EVENTS",
-			SagaCommandsStream: "SAGA_USER_COMMANDS",
+			UserEventsStream:              "USER_EVENTS",
+			SagaCommandsStream:            "SAGA_USER_COMMANDS",
+			UserDetailedStream:            "USER_DETAILED",
+			UserDetailedProjectionSubject: "user.detailed.projection.requested",
 		}, logger)).To(Succeed())
 
-		Expect(js.updated).To(Equal([]string{"USER_EVENTS", "SAGA_USER_COMMANDS"}))
+		Expect(js.updated).To(Equal([]string{"USER_EVENTS", "SAGA_USER_COMMANDS", "USER_DETAILED"}))
 	})
 
 	It("wraps connection, jetstream, and stream update failures", func() {

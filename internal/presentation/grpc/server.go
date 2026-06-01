@@ -2,11 +2,13 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
 	"user-service/config"
 	app "user-service/internal/application"
+	domain "user-service/internal/domain"
 
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
@@ -41,11 +43,11 @@ func NewServer(svc app.UserService, cfg config.GRPCConfig, log logging.Logger) (
 		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()),
 	)
 	s := &server{
-		svc: svc,
-		cfg: cfg,
-		log: log.With(logging.String("module", "grpc-server")),
+		svc:  svc,
+		cfg:  cfg,
+		log:  log.With(logging.String("module", "grpc-server")),
 		mapr: newUserMapper(),
-		srv: grpcSrv,
+		srv:  grpcSrv,
 	}
 	userv1.RegisterUserQueryServiceServer(grpcSrv, s)
 	return s, nil
@@ -150,8 +152,38 @@ func (s *server) GetUserPreviewByID(ctx context.Context, req *userv1.GetUserPrev
 			logging.String("user_id", req.GetUserId()),
 			logging.Err(err),
 		)
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, userQueryStatus(err)
 	}
 
 	return s.mapr.ToPreviewResponse(user), nil
+}
+
+// GetDetailedUserByUsername returns the cached or lazily loaded detailed user.
+func (s *server) GetDetailedUserByUsername(ctx context.Context, req *userv1.GetDetailedUserByUsernameRequest) (*userv1.GetDetailedUserByUsernameResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	user, err := s.svc.GetDetailedUserByUsername(ctx, req.GetUsername())
+	if err != nil {
+		log.Error("get detailed user failed",
+			logging.Operation("grpc.user.detailed"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("username", req.GetUsername()),
+			logging.Err(err),
+		)
+		return nil, userQueryStatus(err)
+	}
+
+	return s.mapr.ToDetailedResponse(user), nil
+}
+
+func userQueryStatus(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, domain.ErrUserNotFound) {
+		return status.Error(codes.NotFound, "user not found")
+	}
+	return status.Error(codes.Internal, "internal server error")
 }

@@ -75,8 +75,8 @@ var _ = Describe("repository unit", func() {
 
 	It("creates, reads, and activates users from returned rows", func() {
 		now := time.Now().UTC()
-		rows := sqlmock.NewRows([]string{"user_id", "username", "first_name", "last_name", "is_active", "status", "created_at", "updated_at"}).
-			AddRow("user-1", "alex", "Alex", "Doe", false, user.StatusPendingRegistration, now, now)
+		rows := sqlmock.NewRows([]string{"user_id", "username", "first_name", "last_name", "avatar_id", "about", "is_active", "status", "created_at", "updated_at"}).
+			AddRow("user-1", "alex", "Alex", "Doe", "", "", false, user.StatusPendingRegistration, now, now)
 		mock.ExpectQuery(regexp.QuoteMeta(createUserQuery)).
 			WithArgs("user-1", "alex", "Alex", "Doe").
 			WillReturnRows(rows)
@@ -91,8 +91,8 @@ var _ = Describe("repository unit", func() {
 		Expect(created.ID).To(Equal("user-1"))
 		Expect(created.Status).To(Equal(user.StatusPendingRegistration))
 
-		readRows := sqlmock.NewRows([]string{"user_id", "username", "first_name", "last_name", "is_active", "status", "created_at", "updated_at"}).
-			AddRow("user-1", "alex", "Alex", "Doe", false, user.StatusPendingRegistration, now, now)
+		readRows := sqlmock.NewRows([]string{"user_id", "username", "first_name", "last_name", "avatar_id", "about", "is_active", "status", "created_at", "updated_at"}).
+			AddRow("user-1", "alex", "Alex", "Doe", "", "", false, user.StatusPendingRegistration, now, now)
 		mock.ExpectQuery(regexp.QuoteMeta(getUserByID)).
 			WithArgs("user-1").
 			WillReturnRows(readRows)
@@ -101,8 +101,8 @@ var _ = Describe("repository unit", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(loaded.Username).To(Equal("alex"))
 
-		activeRows := sqlmock.NewRows([]string{"user_id", "username", "first_name", "last_name", "is_active", "status", "created_at", "updated_at"}).
-			AddRow("user-1", "alex", "Alex", "Doe", true, user.StatusActive, now, now)
+		activeRows := sqlmock.NewRows([]string{"user_id", "username", "first_name", "last_name", "avatar_id", "about", "is_active", "status", "created_at", "updated_at"}).
+			AddRow("user-1", "alex", "Alex", "Doe", "", "", true, user.StatusActive, now, now)
 		mock.ExpectQuery(regexp.QuoteMeta(activateUserByID)).
 			WithArgs("user-1").
 			WillReturnRows(activeRows)
