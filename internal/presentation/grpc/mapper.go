@@ -23,6 +23,7 @@ func (m *userMapper) ToPreviewResponse(user *domain.User) *userv1.GetUserPreview
 			Username:    user.Username,
 			DisplayName: domain.DisplayName(user.FirstName, user.LastName),
 			AvatarId:    user.AvatarID,
+			AvatarUrl:   user.AvatarURL,
 		},
 	}
 }

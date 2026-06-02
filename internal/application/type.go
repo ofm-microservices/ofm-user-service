@@ -15,6 +15,7 @@ type UserService interface {
 	DeactivateUser(ctx context.Context, userID string) error
 	DeleteUser(ctx context.Context, userID string) error
 	GetUserPreviewByID(ctx context.Context, userID string) (*domain.User, error)
+	GetUserPreviewByIDNoCache(ctx context.Context, userID string) (*domain.User, error)
 	GetDetailedUserByUsername(ctx context.Context, username string) (*domain.User, error)
 }
 
