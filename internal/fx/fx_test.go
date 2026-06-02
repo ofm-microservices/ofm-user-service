@@ -447,6 +447,9 @@ func (s *stubUserService) DeleteUser(context.Context, string) error     { return
 func (s *stubUserService) GetUserPreviewByID(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
 }
+func (s *stubUserService) GetUserPreviewByIDNoCache(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
 func (s *stubUserService) GetDetailedUserByUsername(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
 }

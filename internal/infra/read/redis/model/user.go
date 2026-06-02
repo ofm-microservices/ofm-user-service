@@ -7,6 +7,7 @@ type UserCache struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	AvatarID  string `json:"avatar_id"`
+	AvatarURL string `json:"avatar_url"`
 	IsActive  bool   `json:"is_active"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`

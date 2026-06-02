@@ -158,6 +158,28 @@ func (s *server) GetUserPreviewByID(ctx context.Context, req *userv1.GetUserPrev
 	return s.mapr.ToPreviewResponse(user), nil
 }
 
+// GetUserPreviewByIDNoCache returns a user preview without touching the Redis read model.
+func (s *server) GetUserPreviewByIDNoCache(ctx context.Context, req *userv1.GetUserPreviewByIDNoCacheRequest) (*userv1.GetUserPreviewByIDNoCacheResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	user, err := s.svc.GetUserPreviewByIDNoCache(ctx, req.GetUserId())
+	if err != nil {
+		log.Error("get user preview no cache failed",
+			logging.Operation("grpc.user.preview_no_cache"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("user_id", req.GetUserId()),
+			logging.Err(err),
+		)
+		return nil, userQueryStatus(err)
+	}
+
+	return &userv1.GetUserPreviewByIDNoCacheResponse{
+		User: s.mapr.ToPreviewResponse(user).GetUser(),
+	}, nil
+}
+
 // GetDetailedUserByUsername returns the cached or lazily loaded detailed user.
 func (s *server) GetDetailedUserByUsername(ctx context.Context, req *userv1.GetDetailedUserByUsernameRequest) (*userv1.GetDetailedUserByUsernameResponse, error) {
 	started := time.Now()

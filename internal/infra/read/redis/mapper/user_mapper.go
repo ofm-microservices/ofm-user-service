@@ -15,6 +15,7 @@ func MapDomainUserToCache(user *domain.User) model.UserCache {
 		FirstName: user.FirstName,
 		LastName:  user.LastName,
 		AvatarID:  user.AvatarID,
+		AvatarURL: user.AvatarURL,
 		IsActive:  user.IsActive,
 		CreatedAt: user.CreatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z"),
 		UpdatedAt: user.UpdatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z"),
@@ -48,6 +49,7 @@ func MapCacheToDomainUser(cache model.UserCache) *domain.User {
 		FirstName: cache.FirstName,
 		LastName:  cache.LastName,
 		AvatarID:  cache.AvatarID,
+		AvatarURL: cache.AvatarURL,
 		IsActive:  cache.IsActive,
 	}
 }

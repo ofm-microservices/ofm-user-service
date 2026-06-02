@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"strings"
+
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	domain "user-service/internal/domain"
 )
 
@@ -176,23 +177,47 @@ func (s *userService) GetUserPreviewByID(ctx context.Context, userID string) (*d
 	}
 
 	if cached, err := s.readRepo.GetByID(ctx, userID); err == nil && cached != nil {
+		if strings.TrimSpace(cached.AvatarURL) == "" && strings.TrimSpace(cached.AvatarID) != "" {
+			if avatarURL, err := s.files.GetFileURL(ctx, cached.AvatarID); err == nil {
+				cached.AvatarURL = avatarURL
+				if err := s.readRepo.Upsert(ctx, cached); err != nil {
+					s.log.Error("failed to refresh user preview avatar url cache",
+						logging.String("user_id", userID),
+						logging.String("avatar_id", cached.AvatarID),
+						logging.Err(err),
+					)
+				}
+			} else {
+				s.log.Error("failed to resolve cached user preview avatar url",
+					logging.String("user_id", userID),
+					logging.String("avatar_id", cached.AvatarID),
+					logging.Err(err),
+				)
+			}
+		}
 		return cached, nil
 	} else if err != nil && !errors.Is(err, domain.ErrUserNotFound) {
 		s.log.Error("failed to get user preview from cache", logging.String("user_id", userID), logging.Err(err))
 	}
 
-	user, err := s.repo.GetByID(ctx, userID)
+	user, err := s.loadUserPreview(ctx, userID)
 	if err != nil {
-		s.log.Error("failed to get user preview from database", logging.String("user_id", userID), logging.Err(err))
 		return nil, err
 	}
-
 	if err := s.readRepo.Upsert(ctx, user); err != nil {
 		s.log.Error("failed to upsert user preview read model", logging.String("user_id", userID), logging.Err(err))
 		return nil, err
 	}
-
 	return user, nil
+}
+
+func (s *userService) GetUserPreviewByIDNoCache(ctx context.Context, userID string) (*domain.User, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, domain.ErrInvalidUserID
+	}
+
+	return s.loadUserPreview(ctx, userID)
 }
 
 func (s *userService) GetDetailedUserByUsername(ctx context.Context, username string) (*domain.User, error) {
@@ -241,6 +266,28 @@ func (s *userService) GetDetailedUserByUsername(ctx context.Context, username st
 			logging.String("username", username),
 			logging.Err(err),
 		)
+	}
+
+	return user, nil
+}
+
+func (s *userService) loadUserPreview(ctx context.Context, userID string) (*domain.User, error) {
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		s.log.Error("failed to get user preview from database", logging.String("user_id", userID), logging.Err(err))
+		return nil, err
+	}
+
+	if avatarID := strings.TrimSpace(user.AvatarID); avatarID != "" {
+		if avatarURL, err := s.files.GetFileURL(ctx, avatarID); err == nil {
+			user.AvatarURL = avatarURL
+		} else {
+			s.log.Error("failed to resolve user preview avatar url",
+				logging.String("user_id", userID),
+				logging.String("avatar_id", avatarID),
+				logging.Err(err),
+			)
+		}
 	}
 
 	return user, nil

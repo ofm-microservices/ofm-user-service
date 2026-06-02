@@ -86,6 +86,21 @@ func (mr *MockUserServiceMockRecorder) GetUserPreviewByID(ctx, userID any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserPreviewByID", reflect.TypeOf((*MockUserService)(nil).GetUserPreviewByID), ctx, userID)
 }
 
+// GetUserPreviewByIDNoCache mocks base method.
+func (m *MockUserService) GetUserPreviewByIDNoCache(ctx context.Context, userID string) (*user.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserPreviewByIDNoCache", ctx, userID)
+	ret0, _ := ret[0].(*user.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserPreviewByIDNoCache indicates an expected call of GetUserPreviewByIDNoCache.
+func (mr *MockUserServiceMockRecorder) GetUserPreviewByIDNoCache(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserPreviewByIDNoCache", reflect.TypeOf((*MockUserService)(nil).GetUserPreviewByIDNoCache), ctx, userID)
+}
+
 // DeactivateUser mocks base method.
 func (m *MockUserService) DeactivateUser(ctx context.Context, userID string) error {
 	m.ctrl.T.Helper()
