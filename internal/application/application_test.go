@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -178,6 +178,104 @@ var _ = Describe("UserService", func() {
 			readRepo.EXPECT().DeleteByID(gomock.Any(), "user-1").Return(errors.New("redis unavailable"))
 
 			err = svc.DeleteUser(context.Background(), "user-1")
+
+			Expect(err).To(MatchError("redis unavailable"))
+		})
+	})
+
+	Describe("ActivateUser", func() {
+		It("rejects an empty user id", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := svc.ActivateUser(context.Background(), "")
+
+			Expect(result).To(BeNil())
+			Expect(err).To(MatchError(user.ErrInvalidUserID))
+		})
+
+		It("activates the write model and projects it to the read model", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedUser := &user.User{ID: "user-1", Username: "alex"}
+
+			repo.EXPECT().ActivateByID(gomock.Any(), "user-1").Return(expectedUser, nil)
+			readRepo.EXPECT().Upsert(gomock.Any(), expectedUser).Return(nil)
+
+			result, err := svc.ActivateUser(context.Background(), "user-1")
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(expectedUser))
+		})
+
+		It("returns write-model activation failures", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			repo.EXPECT().ActivateByID(gomock.Any(), "user-1").Return(nil, user.ErrUserNotFound)
+
+			result, err := svc.ActivateUser(context.Background(), "user-1")
+
+			Expect(result).To(BeNil())
+			Expect(err).To(MatchError(user.ErrUserNotFound))
+		})
+
+		It("returns read-model projection failures after activation", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedUser := &user.User{ID: "user-1", Username: "alex"}
+
+			repo.EXPECT().ActivateByID(gomock.Any(), "user-1").Return(expectedUser, nil)
+			readRepo.EXPECT().Upsert(gomock.Any(), expectedUser).Return(errors.New("redis unavailable"))
+
+			result, err := svc.ActivateUser(context.Background(), "user-1")
+
+			Expect(result).To(BeNil())
+			Expect(err).To(MatchError("redis unavailable"))
+		})
+	})
+
+	Describe("DeactivateUser", func() {
+		It("rejects an empty user id", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = svc.DeactivateUser(context.Background(), "")
+
+			Expect(err).To(MatchError(user.ErrInvalidUserID))
+		})
+
+		It("deactivates the write model and removes the read model", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			repo.EXPECT().DeactivateByID(gomock.Any(), "user-1").Return(nil)
+			readRepo.EXPECT().DeleteByID(gomock.Any(), "user-1").Return(nil)
+
+			Expect(svc.DeactivateUser(context.Background(), "user-1")).To(Succeed())
+		})
+
+		It("returns write-model deactivate failures", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			repo.EXPECT().DeactivateByID(gomock.Any(), "user-1").Return(user.ErrUserNotFound)
+
+			err = svc.DeactivateUser(context.Background(), "user-1")
+
+			Expect(err).To(MatchError(user.ErrUserNotFound))
+		})
+
+		It("returns read-model delete failures after deactivation", func() {
+			svc, err := New(repo, readRepo, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			repo.EXPECT().DeactivateByID(gomock.Any(), "user-1").Return(nil)
+			readRepo.EXPECT().DeleteByID(gomock.Any(), "user-1").Return(errors.New("redis unavailable"))
+
+			err = svc.DeactivateUser(context.Background(), "user-1")
 
 			Expect(err).To(MatchError("redis unavailable"))
 		})

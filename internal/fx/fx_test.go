@@ -11,10 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jmoiron/sqlx"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/fx/fxtest"
@@ -42,6 +44,12 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+		return
+	} else if err := provider.Health(context.Background()); err != nil {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -91,7 +99,7 @@ var _ = Describe("fx providers and invokes", func() {
 			},
 			GRPC: config.GRPCConfig{
 				Host: "127.0.0.1",
-				Port: 19092,
+				Port: 19592,
 			},
 			Redis: config.RedisConfig{
 				Host: "localhost",
@@ -175,19 +183,19 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("constructs the application service", func() {
-		svc, err := ProvideUserService(&stubWriteRepo{}, &stubReadRepo{}, logger)
+		svc, err := ProvideUserService(&stubWriteRepo{}, &stubReadRepo{}, &stubFileClient{}, &stubDetailedUserPublisher{}, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(svc).NotTo(BeNil())
 	})
 
 	It("propagates repository constructor validation", func() {
-		writeRepo, err := ProvideWriteRepo(nil, nil)
+		writeRepo, err := ProvideWriteRepo(nil, nil, logger)
 		Expect(writeRepo).To(BeNil())
 		Expect(err).To(MatchError("yugabyte db is nil"))
 	})
 
 	It("propagates read repository constructor validation", func() {
-		readRepo, err := ProvideReadRepo(nil)
+		readRepo, err := ProvideReadRepo(nil, logger)
 		Expect(readRepo).To(BeNil())
 		Expect(err).To(MatchError("redis client is nil"))
 	})
@@ -242,6 +250,9 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("ensures streams and opens an event broker against real nats", func() {
+		if fxNATSContainer == nil {
+			Skip("Docker is not available for the FX NATS suite")
+		}
 		cfg.NATS = fxNATSCfg
 
 		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
@@ -274,6 +285,9 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("runs migrations and opens a real yugabyte connection", func() {
+		if fxYBContainer == nil {
+			Skip("Docker is not available for the FX Yugabyte suite")
+		}
 		cfg.DB = fxYBCfg
 
 		Expect(InvokeRunMigrations(cfg, logger)).To(Succeed())
@@ -305,6 +319,9 @@ var _ = Describe("fx providers and invokes", func() {
 	})
 
 	It("opens a real redis connection", func() {
+		if fxRedisContainer == nil {
+			Skip("Docker is not available for the FX Redis suite")
+		}
 		cfg.Redis = fxRedisCfg
 
 		client, err := ProvideRedisClient(lc, cfg, logger)
@@ -325,6 +342,54 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(client).To(BeNil())
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("covers storage and messaging provider success paths with seams", func() {
+		previousRunMigrations := runMigrations
+		previousOpenYugaByteDB := openYugaByteDB
+		previousOpenRedisClient := openRedisClient
+		previousEnsureStream := ensureStream
+		previousNewEventBroker := newEventBroker
+		defer func() {
+			runMigrations = previousRunMigrations
+			openYugaByteDB = previousOpenYugaByteDB
+			openRedisClient = previousOpenRedisClient
+			ensureStream = previousEnsureStream
+			newEventBroker = previousNewEventBroker
+		}()
+
+		runMigrations = func(config.DBConfig) error { return nil }
+		Expect(InvokeRunMigrations(cfg, logger)).To(Succeed())
+
+		rawDB, mock, err := sqlmock.New()
+		Expect(err).NotTo(HaveOccurred())
+		dbx := sqlx.NewDb(rawDB, "sqlmock")
+		openYugaByteDB = func(config.DBConfig) (*sqlx.DB, error) { return dbx, nil }
+		dbProvided, err := ProvideYugaByteDB(lc, cfg, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dbProvided).To(Equal(dbx))
+		mock.ExpectClose()
+
+		redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+		openRedisClient = func(context.Context, config.RedisConfig) (*redis.Client, error) { return redisClient, nil }
+		redisProvided, err := ProvideRedisClient(lc, cfg, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(redisProvided).To(Equal(redisClient))
+
+		ensureStream = func(config.NATSConfig, logging.Logger) error { return nil }
+		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
+
+		stubBroker := &stubEventBroker{}
+		newEventBroker = func(config.NATSConfig, logging.Logger) (eventbroker.EventBroker, error) {
+			return stubBroker, nil
+		}
+		providedBroker, err := ProvideEventBroker(lc, cfg, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(providedBroker).To(Equal(stubBroker))
+
+		Expect(lc.Start(context.Background())).To(Succeed())
+		Expect(lc.Stop(context.Background())).To(Succeed())
+		Expect(mock.ExpectationsWereMet()).To(Succeed())
+	})
 })
 
 type stubWriteRepo struct{}
@@ -335,13 +400,38 @@ func (s *stubWriteRepo) Create(context.Context, user.CreateUserParams) (*user.Us
 func (s *stubWriteRepo) GetByID(context.Context, string) (*user.User, error) {
 	return &user.User{}, nil
 }
+func (s *stubWriteRepo) GetByUsername(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
 func (s *stubWriteRepo) ExistsByUsername(context.Context, string) (bool, error) { return false, nil }
-func (s *stubWriteRepo) DeleteByID(context.Context, string) error               { return nil }
+func (s *stubWriteRepo) ActivateByID(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubWriteRepo) DeactivateByID(context.Context, string) error { return nil }
+func (s *stubWriteRepo) DeleteByID(context.Context, string) error     { return nil }
 
 type stubReadRepo struct{}
 
 func (s *stubReadRepo) Upsert(context.Context, *user.User) error { return nil }
-func (s *stubReadRepo) DeleteByID(context.Context, string) error { return nil }
+func (s *stubReadRepo) GetByID(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubReadRepo) DeleteByID(context.Context, string) error           { return nil }
+func (s *stubReadRepo) UpsertByUsername(context.Context, *user.User) error { return nil }
+func (s *stubReadRepo) GetByUsername(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubReadRepo) DeleteByUsername(context.Context, string) error { return nil }
+
+type stubFileClient struct{}
+
+func (s *stubFileClient) GetFileURL(context.Context, string) (string, error) { return "", nil }
+
+type stubDetailedUserPublisher struct{}
+
+func (s *stubDetailedUserPublisher) PublishDetailedUserRequested(context.Context, *user.User) error {
+	return nil
+}
 
 type stubUserService struct{}
 
@@ -349,7 +439,20 @@ func (s *stubUserService) CreateUser(context.Context, string, string, string, st
 	return &user.User{}, nil
 }
 func (s *stubUserService) ExistsByUsername(context.Context, string) (bool, error) { return false, nil }
-func (s *stubUserService) DeleteUser(context.Context, string) error               { return nil }
+func (s *stubUserService) ActivateUser(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubUserService) DeactivateUser(context.Context, string) error { return nil }
+func (s *stubUserService) DeleteUser(context.Context, string) error     { return nil }
+func (s *stubUserService) GetUserPreviewByID(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubUserService) GetUserPreviewByIDNoCache(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
+func (s *stubUserService) GetDetailedUserByUsername(context.Context, string) (*user.User, error) {
+	return &user.User{}, nil
+}
 
 type stubEventBroker struct{}
 
@@ -373,10 +476,12 @@ func (s *registrationSagaSubscriberStub) Subscribe(context.Context) error {
 }
 
 var (
-	_ user.UserRepository     = (*stubWriteRepo)(nil)
-	_ user.UserReadRepository = (*stubReadRepo)(nil)
-	_ app.UserService         = (*stubUserService)(nil)
-	_ eventbroker.EventBroker = (*stubEventBroker)(nil)
+	_ user.UserRepository       = (*stubWriteRepo)(nil)
+	_ user.UserReadRepository   = (*stubReadRepo)(nil)
+	_ app.UserService           = (*stubUserService)(nil)
+	_ app.FileURLClient         = (*stubFileClient)(nil)
+	_ app.DetailedUserPublisher = (*stubDetailedUserPublisher)(nil)
+	_ eventbroker.EventBroker   = (*stubEventBroker)(nil)
 )
 
 func startFXNATSContainer(ctx context.Context) (testcontainers.Container, config.NATSConfig) {
@@ -397,22 +502,32 @@ func startFXNATSContainer(ctx context.Context) (testcontainers.Container, config
 	Expect(err).NotTo(HaveOccurred())
 
 	return container, config.NATSConfig{
-		URL:                         "nats://" + host + ":" + port.Port(),
-		UserEventsStream:            "USER_EVENTS",
-		UserCreatedSubject:          "user.created",
-		SagaCommandsStream:          "SAGA_USER_COMMANDS",
-		SagaCreateUserSubject:       "saga.user.create",
-		SagaDeleteUserSubject:       "saga.user.delete",
-		SagaCreateUserResultSubject: "saga.user.create.result",
-		SagaDeleteUserResultSubject: "saga.user.delete.result",
-		SagaCreateUserDurable:       "user_service_saga_create",
-		SagaDeleteUserDurable:       "user_service_saga_delete",
-		SagaBatchSize:               1,
-		SagaMaxWait:                 time.Millisecond,
-		SagaWorkers:                 1,
-		SagaQueueSize:               1,
-		SagaAckWait:                 time.Second,
-		SagaMaxDeliver:              1,
+		URL:                              "nats://" + host + ":" + port.Port(),
+		UserEventsStream:                 "USER_EVENTS",
+		UserCreatedSubject:               "user.created",
+		SagaCommandsStream:               "SAGA_USER_COMMANDS",
+		SagaCreateUserSubject:            "saga.user.create",
+		SagaDeleteUserSubject:            "saga.user.delete",
+		SagaCreateUserResultSubject:      "saga.user.create.result",
+		SagaDeleteUserResultSubject:      "saga.user.delete.result",
+		SagaCreateUserDurable:            "user_service_saga_create",
+		SagaDeleteUserDurable:            "user_service_saga_delete",
+		SagaBatchSize:                    1,
+		SagaMaxWait:                      time.Millisecond,
+		SagaWorkers:                      1,
+		SagaQueueSize:                    1,
+		SagaAckWait:                      time.Second,
+		SagaMaxDeliver:                   1,
+		UserDetailedStream:               "USER_DETAILED",
+		UserDetailedRequestedSubject:     "user.detailed.requested",
+		UserDetailedProjectionSubject:    "user.detailed.projection.requested",
+		UserDetailedProjectionDurable:    "user_service_user_detailed_projection",
+		UserDetailedProjectionBatchSize:  1,
+		UserDetailedProjectionMaxWait:    time.Millisecond,
+		UserDetailedProjectionWorkers:    1,
+		UserDetailedProjectionQueueSize:  1,
+		UserDetailedProjectionAckWait:    time.Second,
+		UserDetailedProjectionMaxDeliver: 1,
 	}
 }
 

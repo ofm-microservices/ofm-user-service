@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
@@ -22,6 +22,12 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+		return
+	} else if err := provider.Health(context.Background()); err != nil {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
@@ -46,6 +52,9 @@ var _ = Describe("natsBroker integration", func() {
 	)
 
 	BeforeEach(func() {
+		if brokerSuiteContainer == nil {
+			Skip("Docker is not available for the NATS integration suite")
+		}
 		ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
 		cfg = uniqueBrokerConfig(brokerSuiteBaseCfg)
 
@@ -454,8 +463,15 @@ var _ = Describe("pullConsumerRuntime helpers", func() {
 	BeforeEach(func() {
 		var suiteCtx context.Context
 		suiteCtx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
+		if brokerSuiteLogger == nil {
+			var err error
+			brokerSuiteLogger, err = logging.New("user-service", "test", "debug")
+			Expect(err).NotTo(HaveOccurred())
+		}
 		cfg = uniqueBrokerConfig(brokerSuiteBaseCfg)
-		Expect(ensureBrokerStreams(cfg)).To(Succeed())
+		if brokerSuiteContainer != nil {
+			Expect(ensureBrokerStreams(cfg)).To(Succeed())
+		}
 		_ = suiteCtx
 	})
 
@@ -464,6 +480,10 @@ var _ = Describe("pullConsumerRuntime helpers", func() {
 	})
 
 	It("updates the adaptive plan from pending consumer info", func() {
+		if brokerSuiteContainer == nil {
+			Skip("Docker is not available for the NATS integration suite")
+		}
+
 		nc, err := nats.Connect(cfg.URL)
 		Expect(err).NotTo(HaveOccurred())
 		defer nc.Close()

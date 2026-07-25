@@ -2,7 +2,7 @@ package appfx
 
 import (
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"user-service/config"
 	rdb "user-service/pkg/storage/redis"
 	ydb "user-service/pkg/storage/yugabyte"
@@ -22,9 +22,13 @@ var StorageModule = fx.Options(
 	),
 )
 
+var runMigrations = ydb.RunMigrations
+var openYugaByteDB = ydb.Open
+var openRedisClient = rdb.Open
+
 // InvokeRunMigrations applies the user-service write-model migrations.
 func InvokeRunMigrations(cfg *config.Config, lg logging.Logger) error {
-	if err := ydb.RunMigrations(cfg.DB); err != nil {
+	if err := runMigrations(cfg.DB); err != nil {
 		lg.Error("run migrations failed", logging.Err(err))
 		return err
 	}
@@ -35,7 +39,7 @@ func InvokeRunMigrations(cfg *config.Config, lg logging.Logger) error {
 
 // ProvideYugaByteDB opens the YugabyteDB connection owned by user-service.
 func ProvideYugaByteDB(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (*sqlx.DB, error) {
-	dbx, err := ydb.Open(cfg.DB)
+	dbx, err := openYugaByteDB(cfg.DB)
 	if err != nil {
 		lg.Error("open database failed", logging.Err(err))
 		return nil, err
@@ -55,7 +59,7 @@ func ProvideYugaByteDB(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (
 
 // ProvideRedisClient opens the Redis client used for the user read model.
 func ProvideRedisClient(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (*redis.Client, error) {
-	client, err := rdb.Open(context.Background(), cfg.Redis)
+	client, err := openRedisClient(context.Background(), cfg.Redis)
 	if err != nil {
 		lg.Error("open redis failed", logging.Err(err))
 		return nil, err

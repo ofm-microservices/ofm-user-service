@@ -1,12 +1,38 @@
 package nats
 
 import (
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"time"
 	"user-service/config"
 
 	"github.com/nats-io/nats.go"
 )
+
+type bootstrapConn interface {
+	JetStream() (jetStreamManager, error)
+	Close()
+}
+
+type jetStreamManager interface {
+	AddStream(cfg *nats.StreamConfig, opts ...nats.JSOpt) (*nats.StreamInfo, error)
+	UpdateStream(cfg *nats.StreamConfig, opts ...nats.JSOpt) (*nats.StreamInfo, error)
+}
+
+type realBootstrapConn struct {
+	*nats.Conn
+}
+
+func (c realBootstrapConn) JetStream() (jetStreamManager, error) {
+	return c.Conn.JetStream()
+}
+
+var connectBootstrap = func(cfg config.NATSConfig) (bootstrapConn, error) {
+	nc, err := Connect(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return realBootstrapConn{Conn: nc}, nil
+}
 
 // EnsureStream creates or updates the JetStream streams required by
 // user-service.
@@ -21,7 +47,7 @@ func EnsureStream(cfg config.NATSConfig, log logging.Logger) error {
 		logging.String("subject", cfg.UserCreatedSubject),
 	)
 
-	nc, err := Connect(cfg)
+	nc, err := connectBootstrap(cfg)
 	if err != nil {
 		return err
 	}
@@ -64,9 +90,26 @@ func EnsureStream(cfg config.NATSConfig, log logging.Logger) error {
 		}
 	}
 
+	detailedStreamCfg := &nats.StreamConfig{
+		Name:      cfg.UserDetailedStream,
+		Subjects:  []string{cfg.UserDetailedProjectionSubject},
+		Storage:   nats.FileStorage,
+		Retention: nats.LimitsPolicy,
+		Replicas:  1,
+		MaxAge:    7 * 24 * time.Hour,
+	}
+
+	_, err = js.AddStream(detailedStreamCfg)
+	if err != nil {
+		if _, updateErr := js.UpdateStream(detailedStreamCfg); updateErr != nil {
+			return WrapEnsureStreamError(detailedStreamCfg.Name, err, updateErr)
+		}
+	}
+
 	lg.Info("jetstream streams ensured",
 		logging.String("user_events_stream", streamCfg.Name),
 		logging.String("saga_commands_stream", sagaStreamCfg.Name),
+		logging.String("user_detailed_stream", detailedStreamCfg.Name),
 	)
 	return nil
 }

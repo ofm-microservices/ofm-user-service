@@ -7,12 +7,14 @@ import (
 
 type registrationSagaMessageMapper struct{}
 
+var jsonMarshal = json.Marshal
+
 func newRegistrationSagaMessageMapper() RegistrationSagaMessageMapper {
 	return &registrationSagaMessageMapper{}
 }
 
 func (m *registrationSagaMessageMapper) ToCreateFailureResultPayload(cmd createUserCommand, reason string) ([]byte, error) {
-	payload, err := json.Marshal(createUserResult{
+	payload, err := jsonMarshal(createUserResult{
 		SessionID: cmd.SessionID,
 		UserID:    cmd.UserID,
 		SagaID:    cmd.SagaID,
@@ -28,7 +30,7 @@ func (m *registrationSagaMessageMapper) ToCreateFailureResultPayload(cmd createU
 }
 
 func (m *registrationSagaMessageMapper) ToCreateSuccessResultPayload(cmd createUserCommand) ([]byte, error) {
-	payload, err := json.Marshal(createUserResult{
+	payload, err := jsonMarshal(createUserResult{
 		SessionID: cmd.SessionID,
 		UserID:    cmd.UserID,
 		SagaID:    cmd.SagaID,
@@ -43,7 +45,7 @@ func (m *registrationSagaMessageMapper) ToCreateSuccessResultPayload(cmd createU
 }
 
 func (m *registrationSagaMessageMapper) ToDeleteFailureResultPayload(cmd deleteUserCommand, reason string) ([]byte, error) {
-	payload, err := json.Marshal(deleteUserResult{
+	payload, err := jsonMarshal(deleteUserResult{
 		SessionID: cmd.SessionID,
 		UserID:    cmd.UserID,
 		SagaID:    cmd.SagaID,
@@ -59,7 +61,7 @@ func (m *registrationSagaMessageMapper) ToDeleteFailureResultPayload(cmd deleteU
 }
 
 func (m *registrationSagaMessageMapper) ToDeleteSuccessResultPayload(cmd deleteUserCommand) ([]byte, error) {
-	payload, err := json.Marshal(deleteUserResult{
+	payload, err := jsonMarshal(deleteUserResult{
 		SessionID: cmd.SessionID,
 		UserID:    cmd.UserID,
 		SagaID:    cmd.SagaID,

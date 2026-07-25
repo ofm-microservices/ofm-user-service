@@ -10,8 +10,11 @@ func newApp() *fx.App {
 	return fx.New(
 		appfx.ConfigModule,
 		appfx.LoggerModule,
+		appfx.TracingModule,
+		appfx.MetricsModule,
 		appfx.AppModule,
 		appfx.StorageModule,
+		appfx.OutboundModule,
 		appfx.MessagingModule,
 		appfx.RepoModule,
 		appfx.ServiceModule,
@@ -19,9 +22,7 @@ func newApp() *fx.App {
 	)
 }
 
-var runApp = func(app *fx.App) {
-	app.Run()
-}
+var runApp = (*fx.App).Run
 
 func main() {
 	runApp(newApp())

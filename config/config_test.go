@@ -69,7 +69,7 @@ var _ = Describe("Load", func() {
 		Expect(cfg.DB.ConnMaxLifetime).To(Equal(5 * time.Minute))
 		Expect(cfg.DB.MigrationsPath).To(Equal("file://migration/yugabyte"))
 		Expect(cfg.GRPC.Host).To(Equal("0.0.0.0"))
-		Expect(cfg.GRPC.Port).To(Equal(9092))
+		Expect(cfg.GRPC.Port).To(Equal(9502))
 		Expect(cfg.Redis.Host).To(Equal("localhost"))
 		Expect(cfg.Redis.Port).To(Equal(6379))
 		Expect(cfg.NATS.URL).To(Equal("nats://localhost:4222"))

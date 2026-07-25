@@ -6,12 +6,24 @@ import (
 	eventbroker "user-service/internal/presentation/event_broker"
 
 	"github.com/nats-io/nats.go"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 // RegistrationSagaSubscriber consumes user-related saga commands from NATS.
 type RegistrationSagaSubscriber interface {
 	Subscribe(ctx context.Context) error
+}
+
+// DetailedUserProjectionRelay republished detailed-user request events to the
+// durable projection subject.
+type DetailedUserProjectionRelay interface {
+	Start(ctx context.Context) error
+}
+
+// DetailedUserProjectionSubscriber consumes detailed-user projection events
+// and updates the Redis read model.
+type DetailedUserProjectionSubscriber interface {
+	Start(ctx context.Context) error
 }
 
 // RegistrationSagaMessageMapper translates user registration results into NATS

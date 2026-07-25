@@ -26,6 +26,12 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+		return
+	} else if err := provider.Health(context.Background()); err != nil {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -40,6 +46,9 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("Open", func() {
 	It("opens a real redis connection", func() {
+		if redisStorageSuiteContainer == nil {
+			Skip("Docker is not available for the Redis storage suite")
+		}
 		client, err := Open(context.Background(), redisStorageSuiteCfg)
 
 		Expect(err).NotTo(HaveOccurred())

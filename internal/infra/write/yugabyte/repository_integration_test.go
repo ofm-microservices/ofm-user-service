@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
@@ -24,45 +25,54 @@ var (
 	repoSuiteDB        *sqlx.DB
 )
 
-var _ = BeforeSuite(func() {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	repoSuiteContainer, repoSuiteCfg = startYugabyteContainer(ctx)
-	Expect(pkgdb.RunMigrations(repoSuiteCfg)).To(Succeed())
-
-	var err error
-	repoSuiteDB, err = pkgdb.Open(repoSuiteCfg)
-	Expect(err).NotTo(HaveOccurred())
-})
-
-var _ = AfterSuite(func() {
-	if repoSuiteDB != nil {
-		Expect(repoSuiteDB.Close()).To(Succeed())
-	}
-	if repoSuiteContainer != nil {
-		Expect(repoSuiteContainer.Terminate(context.Background())).To(Succeed())
-	}
-})
-
-var _ = Describe("repository integration", func() {
+var _ = Describe("repository integration", Ordered, func() {
 	var repoAny user.UserRepository
+	var logger logging.Logger
+
+	BeforeAll(func() {
+		if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
+			Skip("Docker is not available for the Yugabyte suite")
+		} else if err := provider.Health(context.Background()); err != nil {
+			Skip("Docker is not healthy for the Yugabyte suite")
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		repoSuiteContainer, repoSuiteCfg = startYugabyteContainer(ctx)
+		Expect(pkgdb.RunMigrations(repoSuiteCfg)).To(Succeed())
+
+		var err error
+		repoSuiteDB, err = pkgdb.Open(repoSuiteCfg)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterAll(func() {
+		if repoSuiteDB != nil {
+			Expect(repoSuiteDB.Close()).To(Succeed())
+		}
+		if repoSuiteContainer != nil {
+			Expect(repoSuiteContainer.Terminate(context.Background())).To(Succeed())
+		}
+	})
 
 	BeforeEach(func() {
 		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE users`)
 		Expect(err).NotTo(HaveOccurred())
 
+		logger, err = logging.New("user-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
 		var errNew error
-		repoAny, errNew = New(repoSuiteDB, NewPgErrorTranslator())
+		repoAny, errNew = New(repoSuiteDB, NewPgErrorTranslator(), logger)
 		Expect(errNew).NotTo(HaveOccurred())
 	})
 
 	It("validates constructor dependencies", func() {
-		repo, err := New(nil, NewPgErrorTranslator())
+		repo, err := New(nil, NewPgErrorTranslator(), logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilYugaByteDB))
 
-		repo, err = New(repoSuiteDB, nil)
+		repo, err = New(repoSuiteDB, nil, logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilDBErrorTranslator))
 	})

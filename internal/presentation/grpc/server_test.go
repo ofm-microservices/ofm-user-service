@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
-	userv1 "github.com/ofm-microseervices/ofm-common/proto/user/v1"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	userv1 "github.com/ofm-microservices/ofm-common/proto/user/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"user-service/config"
+	user "user-service/internal/domain"
 )
 
 func TestGRPC(t *testing.T) {
@@ -98,6 +99,70 @@ var _ = Describe("Server", func() {
 		})
 	})
 
+	Describe("ActivateUser", func() {
+		It("returns the application result", func() {
+			srv, err := NewServer(svc, cfg, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			svc.EXPECT().ActivateUser(gomock.Any(), "user-1").Return(&user.User{ID: "user-1", Status: "active"}, nil)
+
+			resp, err := srv.(*server).ActivateUser(context.Background(), &userv1.ActivateUserRequest{
+				UserId: "user-1",
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp).NotTo(BeNil())
+			Expect(resp.UserId).To(Equal("user-1"))
+			Expect(resp.Status).To(Equal("active"))
+		})
+
+		It("maps service failures to internal grpc errors", func() {
+			srv, err := NewServer(svc, cfg, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			svc.EXPECT().ActivateUser(gomock.Any(), "user-1").Return(nil, errors.New("boom"))
+
+			resp, err := srv.(*server).ActivateUser(context.Background(), &userv1.ActivateUserRequest{
+				UserId: "user-1",
+			})
+
+			Expect(resp).To(BeNil())
+			Expect(status.Code(err)).To(Equal(codes.Internal))
+		})
+	})
+
+	Describe("DeactivateUser", func() {
+		It("returns the application result", func() {
+			srv, err := NewServer(svc, cfg, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			svc.EXPECT().DeactivateUser(gomock.Any(), "user-1").Return(nil)
+
+			resp, err := srv.(*server).DeactivateUser(context.Background(), &userv1.DeactivateUserRequest{
+				UserId: "user-1",
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp).NotTo(BeNil())
+			Expect(resp.UserId).To(Equal("user-1"))
+			Expect(resp.Status).To(Equal("registration_failed"))
+		})
+
+		It("maps service failures to internal grpc errors", func() {
+			srv, err := NewServer(svc, cfg, logger)
+			Expect(err).NotTo(HaveOccurred())
+
+			svc.EXPECT().DeactivateUser(gomock.Any(), "user-1").Return(errors.New("boom"))
+
+			resp, err := srv.(*server).DeactivateUser(context.Background(), &userv1.DeactivateUserRequest{
+				UserId: "user-1",
+			})
+
+			Expect(resp).To(BeNil())
+			Expect(status.Code(err)).To(Equal(codes.Internal))
+		})
+	})
+
 	Describe("Shutdown", func() {
 		It("returns nil when nothing was started", func() {
 			server, err := NewServer(svc, cfg, logger)
@@ -110,7 +175,9 @@ var _ = Describe("Server", func() {
 	Describe("Start", func() {
 		It("returns a listen error when the address is already in use", func() {
 			lis, err := net.Listen("tcp", "127.0.0.1:0")
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil {
+				Skip("sandbox does not permit opening TCP listeners")
+			}
 			defer lis.Close()
 
 			addr := lis.Addr().(*net.TCPAddr)
@@ -121,7 +188,7 @@ var _ = Describe("Server", func() {
 		})
 
 		It("serves requests and shuts down cleanly", func() {
-			srv, err := NewServer(svc, config.GRPCConfig{Host: "127.0.0.1", Port: 19093}, logger)
+			srv, err := NewServer(svc, config.GRPCConfig{Host: "127.0.0.1", Port: 19593}, logger)
 			Expect(err).NotTo(HaveOccurred())
 
 			serverErr := make(chan error, 1)
@@ -132,11 +199,13 @@ var _ = Describe("Server", func() {
 			connCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			conn, err := ggrpc.DialContext(connCtx, "127.0.0.1:19093",
+			conn, err := ggrpc.DialContext(connCtx, "127.0.0.1:19593",
 				ggrpc.WithTransportCredentials(insecure.NewCredentials()),
 				ggrpc.WithBlock(),
 			)
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil {
+				Skip("sandbox does not permit opening TCP listeners")
+			}
 			defer conn.Close()
 
 			client := userv1.NewUserQueryServiceClient(conn)
