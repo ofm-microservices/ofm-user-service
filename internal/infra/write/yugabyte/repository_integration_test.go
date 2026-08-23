@@ -57,7 +57,7 @@ var _ = Describe("repository integration", Ordered, func() {
 	})
 
 	BeforeEach(func() {
-		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE users`)
+		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE outbox_events, users CASCADE`)
 		Expect(err).NotTo(HaveOccurred())
 
 		logger, err = logging.New("user-service", "test", "debug")
@@ -94,6 +94,20 @@ var _ = Describe("repository integration", Ordered, func() {
 		Expect(loaded.Username).To(Equal("alex"))
 		Expect(loaded.FirstName).To(Equal("Alex"))
 		Expect(loaded.LastName).To(Equal("Doe"))
+	})
+
+	It("captures insert update and delete in the transactional outbox", func() {
+		userID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+		_, err := repoSuiteDB.Exec(`INSERT INTO users (user_id, username, first_name, last_name, status) VALUES ($1, $2, $3, $4, 'active')`, userID, "outbox-user", "Outbox", "User")
+		Expect(err).NotTo(HaveOccurred())
+		_, err = repoSuiteDB.Exec(`UPDATE users SET first_name = 'Updated' WHERE user_id = $1`, userID)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = repoSuiteDB.Exec(`DELETE FROM users WHERE user_id = $1`, userID)
+		Expect(err).NotTo(HaveOccurred())
+
+		var operations []string
+		Expect(repoSuiteDB.Select(&operations, `SELECT operation FROM outbox_events WHERE aggregate_id = $1 ORDER BY occurred_at, created_at`, userID)).To(Succeed())
+		Expect(operations).To(Equal([]string{"created", "updated", "deactivated"}))
 	})
 
 	It("reports username existence", func() {

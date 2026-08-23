@@ -7,7 +7,7 @@ import (
 	app "user-service/internal/application"
 	user "user-service/internal/domain"
 	eventbroker "user-service/internal/presentation/event_broker"
-	events "user-service/internal/presentation/event_broker/nats"
+	kafkaevents "user-service/internal/presentation/event_broker/kafka"
 	grpcserver "user-service/internal/presentation/grpc"
 
 	"go.uber.org/fx"
@@ -17,7 +17,7 @@ import (
 // the FX lifecycle.
 var PresentationModule = fx.Options(
 	fx.Provide(
-		events.NewDomainFailureReasonResolver,
+		kafkaevents.NewDomainFailureReasonResolver,
 		ProvideRegistrationSagaSubscriber,
 		ProvideDetailedUserProjectionRelay,
 		ProvideDetailedUserProjectionSubscriber,
@@ -31,16 +31,16 @@ var PresentationModule = fx.Options(
 	),
 )
 
-// ProvideRegistrationSagaSubscriber constructs the NATS subscriber that
+// ProvideRegistrationSagaSubscriber constructs the Kafka subscriber that
 // consumes registration-saga commands.
 func ProvideRegistrationSagaSubscriber(
 	broker eventbroker.EventBroker,
 	service app.UserService,
 	cfg *config.Config,
-	resolver events.FailureReasonResolver,
+	resolver kafkaevents.FailureReasonResolver,
 	lg logging.Logger,
-) (events.RegistrationSagaSubscriber, error) {
-	return events.NewRegistrationSagaSubscriber(broker, service, cfg.NATS, resolver, lg)
+) (kafkaevents.RegistrationSagaSubscriber, error) {
+	return kafkaevents.NewRegistrationSagaSubscriber(broker, service, cfg.Kafka, resolver, lg)
 }
 
 // ProvideDetailedUserProjectionRelay constructs the relay that forwards
@@ -49,8 +49,8 @@ func ProvideDetailedUserProjectionRelay(
 	broker eventbroker.EventBroker,
 	cfg *config.Config,
 	lg logging.Logger,
-) (events.DetailedUserProjectionRelay, error) {
-	return events.NewDetailedUserProjectionRelay(broker, cfg.NATS, lg)
+) (kafkaevents.DetailedUserProjectionRelay, error) {
+	return kafkaevents.NewDetailedUserProjectionRelay(broker, cfg.Kafka, lg)
 }
 
 // ProvideDetailedUserProjectionSubscriber constructs the Redis projection
@@ -60,8 +60,8 @@ func ProvideDetailedUserProjectionSubscriber(
 	read user.UserReadRepository,
 	cfg *config.Config,
 	lg logging.Logger,
-) (events.DetailedUserProjectionSubscriber, error) {
-	return events.NewDetailedUserProjectionSubscriber(broker, read, cfg.NATS, lg)
+) (kafkaevents.DetailedUserProjectionSubscriber, error) {
+	return kafkaevents.NewDetailedUserProjectionSubscriber(broker, read, cfg.Kafka, lg)
 }
 
 // ProvideGRPCServer constructs the gRPC query server exposed by user-service.
@@ -77,7 +77,7 @@ func ProvideGRPCServer(
 // saga commands.
 func InvokeSubscribeRegistrationSaga(
 	lc fx.Lifecycle,
-	subscriber events.RegistrationSagaSubscriber,
+	subscriber kafkaevents.RegistrationSagaSubscriber,
 	cfg *config.Config,
 	lg logging.Logger,
 ) {
@@ -88,11 +88,11 @@ func InvokeSubscribeRegistrationSaga(
 			runCtx, runCancel := context.WithCancel(context.Background())
 			cancel = runCancel
 
-			if err := subscriber.Subscribe(runCtx); err != nil {
-				lg.Error("subscribe to registration saga commands failed", logging.Err(err))
-				cancel()
-				return err
-			}
+			go func() {
+				if err := subscriber.Subscribe(runCtx); err != nil && runCtx.Err() == nil {
+					lg.Error("subscribe to registration saga commands failed", logging.Err(err))
+				}
+			}()
 
 			lg.Info("user-service initialized", logging.String("env", cfg.App.Env))
 			return nil
@@ -126,7 +126,7 @@ func InvokeRunGRPCServer(lc fx.Lifecycle, srv grpcserver.Server) {
 
 // InvokeStartDetailedUserProjectionRelay starts the detailed-user request
 // relay.
-func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay events.DetailedUserProjectionRelay) {
+func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay kafkaevents.DetailedUserProjectionRelay) {
 	var cancel context.CancelFunc
 
 	lc.Append(fx.Hook{
@@ -152,7 +152,7 @@ func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay events.Detail
 
 // InvokeStartDetailedUserProjectionSubscriber starts the detailed-user Redis
 // projection worker.
-func InvokeStartDetailedUserProjectionSubscriber(lc fx.Lifecycle, subscriber events.DetailedUserProjectionSubscriber) {
+func InvokeStartDetailedUserProjectionSubscriber(lc fx.Lifecycle, subscriber kafkaevents.DetailedUserProjectionSubscriber) {
 	var cancel context.CancelFunc
 
 	lc.Append(fx.Hook{

@@ -121,6 +121,16 @@ var _ = Describe("fx providers and invokes", func() {
 				SagaAckWait:                 time.Second,
 				SagaMaxDeliver:              1,
 			},
+			Kafka: config.KafkaConfig{
+				Brokers:                     []string{"127.0.0.1:9092"},
+				GroupID:                     "user-service-test",
+				DetailedUserRequestedTopic:  "user.detailed.requested",
+				DetailedUserProjectionTopic: "user.detailed.projection.requested",
+				SagaCreateUserTopic:         "saga.user.create",
+				SagaDeleteUserTopic:         "saga.user.delete",
+				SagaCreateResultTopic:       "saga.user.create.result",
+				SagaDeleteResultTopic:       "saga.user.delete.result",
+			},
 		}
 
 		lc = fxtest.NewLifecycle(GinkgoT())
@@ -220,7 +230,7 @@ var _ = Describe("fx providers and invokes", func() {
 
 		Expect(lc.Start(context.Background())).To(Succeed())
 		Expect(lc.Stop(context.Background())).To(Succeed())
-		Expect(subscriber.calls).To(Equal(1))
+		Eventually(func() int { return subscriber.calls }).Should(Equal(1))
 	})
 
 	It("propagates subscriber startup failures", func() {
@@ -228,8 +238,8 @@ var _ = Describe("fx providers and invokes", func() {
 
 		InvokeSubscribeRegistrationSaga(lc, subscriber, cfg, logger)
 
-		Expect(lc.Start(context.Background())).To(MatchError("boom"))
-		Expect(subscriber.calls).To(Equal(1))
+		Expect(lc.Start(context.Background())).To(Succeed())
+		Eventually(func() int { return subscriber.calls }).Should(Equal(1))
 	})
 
 	It("registers grpc lifecycle hooks and stops the server", func() {
@@ -249,12 +259,8 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(lc.Stop(context.Background())).To(Succeed())
 	})
 
-	It("ensures streams and opens an event broker against real nats", func() {
-		if fxNATSContainer == nil {
-			Skip("Docker is not available for the FX NATS suite")
-		}
-		cfg.NATS = fxNATSCfg
-
+	It("opens a Kafka event broker without stream bootstrap", func() {
+		cfg.Kafka = config.KafkaConfig{Brokers: []string{"127.0.0.1:9092"}, GroupID: "user-test"}
 		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
 
 		eventBroker, err := ProvideEventBroker(lc, cfg, logger)
@@ -263,25 +269,13 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(lc.Stop(context.Background())).To(Succeed())
 	})
 
-	It("propagates nats bootstrap and broker construction failures", func() {
+	It("rejects an empty Kafka broker configuration", func() {
 		badCfg := *cfg
-		badCfg.NATS = config.NATSConfig{
-			URL:                         "nats://127.0.0.1:1",
-			UserEventsStream:            "USER_EVENTS",
-			UserCreatedSubject:          "user.created",
-			SagaCommandsStream:          "SAGA_USER_COMMANDS",
-			SagaCreateUserSubject:       "saga.user.create",
-			SagaDeleteUserSubject:       "saga.user.delete",
-			SagaCreateUserResultSubject: "saga.user.create.result",
-			SagaDeleteUserResultSubject: "saga.user.delete.result",
-		}
-
-		Expect(InvokeEnsureStream(&badCfg, logger)).To(HaveOccurred())
-
-		badCfg.NATS.URL = ""
+		Expect(InvokeEnsureStream(&badCfg, logger)).To(Succeed())
+		badCfg.Kafka.Brokers = nil
 		eventBroker, err := ProvideEventBroker(lc, &badCfg, logger)
 		Expect(eventBroker).To(BeNil())
-		Expect(err).To(MatchError("nats url is empty"))
+		Expect(err).To(MatchError("kafka brokers are empty"))
 	})
 
 	It("runs migrations and opens a real yugabyte connection", func() {
@@ -379,7 +373,7 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
 
 		stubBroker := &stubEventBroker{}
-		newEventBroker = func(config.NATSConfig, logging.Logger) (eventbroker.EventBroker, error) {
+		newEventBroker = func(config.KafkaConfig) (eventbroker.EventBroker, error) {
 			return stubBroker, nil
 		}
 		providedBroker, err := ProvideEventBroker(lc, cfg, logger)

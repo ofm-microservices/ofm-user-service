@@ -78,7 +78,7 @@ var _ = Describe("repository unit", func() {
 		rows := sqlmock.NewRows([]string{"user_id", "username", "first_name", "last_name", "avatar_id", "about", "is_active", "status", "created_at", "updated_at"}).
 			AddRow("user-1", "alex", "Alex", "Doe", "", "", false, user.StatusPendingRegistration, now, now)
 		mock.ExpectQuery(regexp.QuoteMeta(createUserQuery)).
-			WithArgs("user-1", "alex", "Alex", "Doe").
+			WithArgs("user-1", "alex", "Alex", "Doe", "").
 			WillReturnRows(rows)
 
 		created, err := repoAny.Create(context.Background(), user.CreateUserParams{
@@ -115,7 +115,7 @@ var _ = Describe("repository unit", func() {
 
 	It("translates create, read, and activate query failures", func() {
 		mock.ExpectQuery(regexp.QuoteMeta(createUserQuery)).
-			WithArgs("user-1", "alex", "Alex", "Doe").
+			WithArgs("user-1", "alex", "Alex", "Doe", "").
 			WillReturnError(errors.New("insert failed"))
 
 		created, err := repoAny.Create(context.Background(), user.CreateUserParams{

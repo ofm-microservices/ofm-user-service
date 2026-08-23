@@ -12,6 +12,7 @@ type Config struct {
 	File    FileServiceConfig
 	Redis   RedisConfig
 	NATS    NATSConfig
+	Kafka   KafkaConfig
 }
 
 // Load reads environment variables into Config and applies defaults.

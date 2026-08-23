@@ -144,14 +144,18 @@ func (s *server) GetUserPreviewByID(ctx context.Context, req *userv1.GetUserPrev
 	log := logging.WithContext(ctx, s.log)
 	user, err := s.svc.GetUserPreviewByID(ctx, req.GetUserId())
 	if err != nil {
-		log.Error("get user preview failed",
-			logging.Operation("grpc.user.preview"),
-			logging.Attempt(1),
-			logging.Retryable(false),
-			logging.DurationMS(time.Since(started)),
-			logging.String("user_id", req.GetUserId()),
-			logging.Err(err),
-		)
+		if errors.Is(err, domain.ErrUserNotFound) {
+			log.Warn("user preview not found", logging.String("user_id", req.GetUserId()), logging.Err(err))
+		} else {
+			log.Error("get user preview failed",
+				logging.Operation("grpc.user.preview"),
+				logging.Attempt(1),
+				logging.Retryable(false),
+				logging.DurationMS(time.Since(started)),
+				logging.String("user_id", req.GetUserId()),
+				logging.Err(err),
+			)
+		}
 		return nil, userQueryStatus(err)
 	}
 
@@ -164,14 +168,18 @@ func (s *server) GetUserPreviewByIDNoCache(ctx context.Context, req *userv1.GetU
 	log := logging.WithContext(ctx, s.log)
 	user, err := s.svc.GetUserPreviewByIDNoCache(ctx, req.GetUserId())
 	if err != nil {
-		log.Error("get user preview no cache failed",
-			logging.Operation("grpc.user.preview_no_cache"),
-			logging.Attempt(1),
-			logging.Retryable(false),
-			logging.DurationMS(time.Since(started)),
-			logging.String("user_id", req.GetUserId()),
-			logging.Err(err),
-		)
+		if errors.Is(err, domain.ErrUserNotFound) {
+			log.Warn("user preview not found", logging.String("user_id", req.GetUserId()), logging.Err(err))
+		} else {
+			log.Error("get user preview no cache failed",
+				logging.Operation("grpc.user.preview_no_cache"),
+				logging.Attempt(1),
+				logging.Retryable(false),
+				logging.DurationMS(time.Since(started)),
+				logging.String("user_id", req.GetUserId()),
+				logging.Err(err),
+			)
+		}
 		return nil, userQueryStatus(err)
 	}
 
@@ -186,14 +194,18 @@ func (s *server) GetDetailedUserByUsername(ctx context.Context, req *userv1.GetD
 	log := logging.WithContext(ctx, s.log)
 	user, err := s.svc.GetDetailedUserByUsername(ctx, req.GetUsername())
 	if err != nil {
-		log.Error("get detailed user failed",
-			logging.Operation("grpc.user.detailed"),
-			logging.Attempt(1),
-			logging.Retryable(false),
-			logging.DurationMS(time.Since(started)),
-			logging.String("username", req.GetUsername()),
-			logging.Err(err),
-		)
+		if errors.Is(err, domain.ErrUserNotFound) {
+			log.Warn("detailed user not found", logging.String("username", req.GetUsername()), logging.Err(err))
+		} else {
+			log.Error("get detailed user failed",
+				logging.Operation("grpc.user.detailed"),
+				logging.Attempt(1),
+				logging.Retryable(false),
+				logging.DurationMS(time.Since(started)),
+				logging.String("username", req.GetUsername()),
+				logging.Err(err),
+			)
+		}
 		return nil, userQueryStatus(err)
 	}
 

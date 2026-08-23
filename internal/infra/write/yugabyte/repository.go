@@ -46,6 +46,7 @@ func (r *repo) Create(ctx context.Context, params domain.CreateUserParams) (*dom
 		params.Username,
 		params.FirstName,
 		params.LastName,
+		params.AvatarID,
 	).Scan(
 		&userRow.ID,
 		&userRow.Username,

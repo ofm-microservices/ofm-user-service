@@ -274,7 +274,11 @@ func (s *userService) GetDetailedUserByUsername(ctx context.Context, username st
 func (s *userService) loadUserPreview(ctx context.Context, userID string) (*domain.User, error) {
 	user, err := s.repo.GetByID(ctx, userID)
 	if err != nil {
-		s.log.Error("failed to get user preview from database", logging.String("user_id", userID), logging.Err(err))
+		if errors.Is(err, domain.ErrUserNotFound) {
+			s.log.Warn("user preview not found in database", logging.String("user_id", userID), logging.Err(err))
+		} else {
+			s.log.Error("failed to get user preview from database", logging.String("user_id", userID), logging.Err(err))
+		}
 		return nil, err
 	}
 

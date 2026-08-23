@@ -306,13 +306,15 @@ func startBootstrapNATSContainer(ctx context.Context, jetstream bool) (testconta
 	Expect(err).NotTo(HaveOccurred())
 
 	return container, config.NATSConfig{
-		URL:                         "nats://" + host + ":" + port.Port(),
-		UserEventsStream:            "USER_EVENTS",
-		UserCreatedSubject:          "user.created",
-		SagaCommandsStream:          "SAGA_USER_COMMANDS",
-		SagaCreateUserSubject:       "saga.user.create",
-		SagaDeleteUserSubject:       "saga.user.delete",
-		SagaCreateUserResultSubject: "saga.user.create.result",
-		SagaDeleteUserResultSubject: "saga.user.delete.result",
+		URL:                           "nats://" + host + ":" + port.Port(),
+		UserEventsStream:              "USER_EVENTS",
+		UserCreatedSubject:            "user.created",
+		SagaCommandsStream:            "SAGA_USER_COMMANDS",
+		SagaCreateUserSubject:         "saga.user.create",
+		SagaDeleteUserSubject:         "saga.user.delete",
+		SagaCreateUserResultSubject:   "saga.user.create.result",
+		SagaDeleteUserResultSubject:   "saga.user.delete.result",
+		UserDetailedStream:            "USER_DETAILED",
+		UserDetailedProjectionSubject: "user.detailed.projection.requested",
 	}
 }
