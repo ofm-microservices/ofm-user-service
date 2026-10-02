@@ -3,7 +3,7 @@ package appfx
 import (
 	user "user-service/internal/domain"
 	readrepo "user-service/internal/infra/read/redis"
-	writerepo "user-service/internal/infra/write/yugabyte"
+	writerepo "user-service/internal/infra/write/postgres"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
@@ -20,7 +20,7 @@ var RepoModule = fx.Options(
 	),
 )
 
-// ProvideWriteRepo constructs the Yugabyte-backed user repository.
+// ProvideWriteRepo constructs the PostgreSQL-backed user repository.
 func ProvideWriteRepo(dbx *sqlx.DB, translator writerepo.DBErrorTranslator, lg logging.Logger) (user.UserRepository, error) {
 	return writerepo.New(dbx, translator, lg)
 }

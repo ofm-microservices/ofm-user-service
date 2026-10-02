@@ -67,7 +67,7 @@ var _ = Describe("RunMigrations unit", func() {
 			Password:        "admin",
 			Name:            "user_service",
 			SSLMode:         "disable",
-			MigrationsPath:  "file://migration/yugabyte",
+			MigrationsPath:  "file://migration/postgres",
 			MigrationsTable: "schema_migrations",
 		})
 
@@ -100,7 +100,7 @@ var _ = Describe("Open unit", func() {
 		defer rawDB.Close()
 
 		connectDB = func(driverName, dsn string) (*sqlx.DB, error) {
-			Expect(driverName).To(Equal("pgx"))
+			Expect(driverName).To(HavePrefix("pgx-otelsql-"))
 			Expect(dsn).To(ContainSubstring("postgres://admin:admin@localhost:5433/user_service?sslmode=disable"))
 			return dbx, nil
 		}

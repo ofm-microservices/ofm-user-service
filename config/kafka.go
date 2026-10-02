@@ -4,6 +4,9 @@ package config
 type KafkaConfig struct {
 	Brokers                     []string `env:"KAFKA_BROKERS" envSeparator:"," envDefault:"127.0.0.1:9092"`
 	GroupID                     string   `env:"KAFKA_USER_GROUP_ID" envDefault:"user-service"`
+	RecoveryTopic               string   `env:"KAFKA_USER_RECOVERY_TOPIC" envDefault:"migration.recovery.commands.user"`
+	RecoveryGroup               string   `env:"KAFKA_USER_RECOVERY_GROUP" envDefault:"user-service-recovery"`
+	RecoveryCompletedTopic      string   `env:"KAFKA_USER_RECOVERY_COMPLETED_TOPIC" envDefault:"migration.recovery.completed"`
 	DetailedUserRequestedTopic  string   `env:"KAFKA_USER_DETAILED_REQUESTED_TOPIC" envDefault:"user.detailed.requested"`
 	DetailedUserProjectionTopic string   `env:"KAFKA_USER_DETAILED_PROJECTION_TOPIC" envDefault:"user.detailed.projection.requested"`
 	SagaCreateUserTopic         string   `env:"KAFKA_USER_SAGA_CREATE_TOPIC" envDefault:"saga.user.create"`

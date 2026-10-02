@@ -13,7 +13,7 @@ import (
 
 var connectDB = sqlx.Connect
 
-// Open creates the user-service YugabyteDB connection pool.
+// Open creates the user-service PostgreSQL connection pool.
 func Open(cfg config.DBConfig) (*sqlx.DB, error) {
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",

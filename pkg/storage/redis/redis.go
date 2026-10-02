@@ -37,11 +37,15 @@ type breakerHook struct{ breaker *resilience.Breaker }
 func (h *breakerHook) DialHook(next redis.DialHook) redis.DialHook { return next }
 func (h *breakerHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
-		return h.breaker.Do(ctx, func(callCtx context.Context) error { return next(callCtx, cmd) })
+		return h.breaker.DoClassified(ctx, func(callCtx context.Context) error {
+			return next(callCtx, cmd)
+		}, resilience.IsTransientDependencyError)
 	}
 }
 func (h *breakerHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return func(ctx context.Context, cmds []redis.Cmder) error {
-		return h.breaker.Do(ctx, func(callCtx context.Context) error { return next(callCtx, cmds) })
+		return h.breaker.DoClassified(ctx, func(callCtx context.Context) error {
+			return next(callCtx, cmds)
+		}, resilience.IsTransientDependencyError)
 	}
 }

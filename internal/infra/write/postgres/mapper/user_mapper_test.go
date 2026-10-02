@@ -6,17 +6,17 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"user-service/internal/infra/write/yugabyte/model"
+	"user-service/internal/infra/write/postgres/model"
 )
 
 func TestMapper(t *testing.T) {
 	t.Helper()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Yugabyte Mapper Suite")
+	RunSpecs(t, "PostgreSQL Mapper Suite")
 }
 
 var _ = Describe("MapUserRowToDomain", func() {
-	It("maps the yugabyte row into the domain user", func() {
+	It("maps the postgres row into the domain user", func() {
 		createdAt := time.Date(2026, time.April, 24, 8, 30, 0, 0, time.UTC)
 		updatedAt := time.Date(2026, time.April, 24, 9, 45, 0, 0, time.UTC)
 

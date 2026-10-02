@@ -15,7 +15,7 @@ import (
 func TestRepository(t *testing.T) {
 	t.Helper()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Yugabyte Repository Suite")
+	RunSpecs(t, "PostgreSQL Repository Suite")
 }
 
 var _ = Describe("PgErrorTranslator", func() {

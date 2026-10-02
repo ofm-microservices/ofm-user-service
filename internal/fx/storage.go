@@ -5,7 +5,7 @@ import (
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"user-service/config"
 	rdb "user-service/pkg/storage/redis"
-	ydb "user-service/pkg/storage/yugabyte"
+	ydb "user-service/pkg/storage/postgres"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/redis/go-redis/v9"
@@ -17,13 +17,13 @@ import (
 var StorageModule = fx.Options(
 	fx.Invoke(InvokeRunMigrations),
 	fx.Provide(
-		ProvideYugaByteDB,
+		ProvidePostgresDB,
 		ProvideRedisClient,
 	),
 )
 
 var runMigrations = ydb.RunMigrations
-var openYugaByteDB = ydb.Open
+var openPostgresDB = ydb.Open
 var openRedisClient = rdb.Open
 
 // InvokeRunMigrations applies the user-service write-model migrations.
@@ -37,9 +37,9 @@ func InvokeRunMigrations(cfg *config.Config, lg logging.Logger) error {
 	return nil
 }
 
-// ProvideYugaByteDB opens the YugabyteDB connection owned by user-service.
-func ProvideYugaByteDB(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (*sqlx.DB, error) {
-	dbx, err := openYugaByteDB(cfg.DB)
+// ProvidePostgresDB opens the PostgreSQL connection owned by user-service.
+func ProvidePostgresDB(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (*sqlx.DB, error) {
+	dbx, err := openPostgresDB(cfg.DB)
 	if err != nil {
 		lg.Error("open database failed", logging.Err(err))
 		return nil, err
