@@ -66,10 +66,27 @@ func NewRegistrationSagaSubscriber(b eventbroker.EventBroker, service app.UserSe
 }
 
 func (s *registrationSagaSubscriber) Subscribe(ctx context.Context) error {
-	if err := s.broker.Subscribe(ctx, s.cfg.SagaCreateUserTopic, s.handleCreate); err != nil {
-		return err
-	}
-	return s.broker.Subscribe(ctx, s.cfg.SagaDeleteUserTopic, s.handleDelete)
+	// Each Subscribe call is a long-running fetch loop. Start both consumers
+	// independently; running the first one synchronously would prevent the
+	// second command stream from ever being registered.
+	go func() {
+		for ctx.Err() == nil {
+			if err := s.broker.Subscribe(ctx, s.cfg.SagaCreateUserTopic, s.handleCreate); err != nil && ctx.Err() == nil {
+				s.log.Error("create-user Kafka consumer stopped; retrying", logging.String("topic", s.cfg.SagaCreateUserTopic), logging.Err(err))
+				time.Sleep(2 * time.Second)
+			}
+		}
+	}()
+	go func() {
+		for ctx.Err() == nil {
+			if err := s.broker.Subscribe(ctx, s.cfg.SagaDeleteUserTopic, s.handleDelete); err != nil && ctx.Err() == nil {
+				s.log.Error("delete-user Kafka consumer stopped; retrying", logging.String("topic", s.cfg.SagaDeleteUserTopic), logging.Err(err))
+				time.Sleep(2 * time.Second)
+			}
+		}
+	}()
+	s.log.Info("user registration Kafka consumers ready", logging.String("create_topic", s.cfg.SagaCreateUserTopic), logging.String("delete_topic", s.cfg.SagaDeleteUserTopic))
+	return nil
 }
 
 func (s *registrationSagaSubscriber) handleCreate(ctx context.Context, _ string, raw []byte) error {

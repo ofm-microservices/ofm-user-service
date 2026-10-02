@@ -2,7 +2,9 @@ package appfx
 
 import (
 	"context"
+	"fmt"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"time"
 	"user-service/config"
 	app "user-service/internal/application"
 	user "user-service/internal/domain"
@@ -21,15 +23,61 @@ var PresentationModule = fx.Options(
 		ProvideRegistrationSagaSubscriber,
 		ProvideDetailedUserProjectionRelay,
 		ProvideDetailedUserProjectionSubscriber,
+		ProvideUserRecoverySubscriber,
 		ProvideGRPCServer,
 	),
 	fx.Invoke(
 		InvokeSubscribeRegistrationSaga,
 		InvokeStartDetailedUserProjectionRelay,
 		InvokeStartDetailedUserProjectionSubscriber,
+		InvokeSubscribeUserRecovery,
 		InvokeRunGRPCServer,
 	),
 )
+
+// ProvideUserRecoverySubscriber constructs the user-owned migration consumer.
+func ProvideUserRecoverySubscriber(broker eventbroker.EventBroker, service app.UserService, cfg *config.Config, lg logging.Logger) (kafkaevents.UserRecoverySubscriber, error) {
+	return kafkaevents.NewUserRecoverySubscriber(broker, service, cfg.Kafka, lg)
+}
+
+// InvokeSubscribeUserRecovery starts the durable user recovery consumer.
+func InvokeSubscribeUserRecovery(lc fx.Lifecycle, subscriber kafkaevents.UserRecoverySubscriber, lg logging.Logger) {
+	var cancel context.CancelFunc
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		ctx, stop := context.WithCancel(context.Background())
+		cancel = stop
+		go func() {
+			backoff := time.Second
+			for ctx.Err() == nil {
+				if err := subscriber.Subscribe(ctx); err != nil && ctx.Err() == nil {
+					lg.Error("user recovery consumer stopped; retrying", logging.Err(err), logging.String("backoff", backoff.String()))
+				}
+				if ctx.Err() != nil {
+					return
+				}
+				timer := time.NewTimer(backoff)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+				if backoff < 30*time.Second {
+					backoff *= 2
+					if backoff > 30*time.Second {
+						backoff = 30 * time.Second
+					}
+				}
+			}
+		}()
+		return nil
+	}, OnStop: func(context.Context) error {
+		if cancel != nil {
+			cancel()
+		}
+		return nil
+	}})
+}
 
 // ProvideRegistrationSagaSubscriber constructs the Kafka subscriber that
 // consumes registration-saga commands.
@@ -135,8 +183,11 @@ func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay kafkaevents.D
 			cancel = runCancel
 
 			go func() {
-				if err := relay.Start(runCtx); err != nil {
-					panic(err)
+				for runCtx.Err() == nil {
+					if err := relay.Start(runCtx); err != nil && runCtx.Err() == nil {
+						fmt.Printf("user detailed projection relay stopped: %v; retrying\\n", err)
+						time.Sleep(2 * time.Second)
+					}
 				}
 			}()
 			return nil
@@ -161,8 +212,11 @@ func InvokeStartDetailedUserProjectionSubscriber(lc fx.Lifecycle, subscriber kaf
 			cancel = runCancel
 
 			go func() {
-				if err := subscriber.Start(runCtx); err != nil {
-					panic(err)
+				for runCtx.Err() == nil {
+					if err := subscriber.Start(runCtx); err != nil && runCtx.Err() == nil {
+						fmt.Printf("user detailed projection subscriber stopped: %v; retrying\\n", err)
+						time.Sleep(2 * time.Second)
+					}
 				}
 			}()
 			return nil
