@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 	domain "user-service/internal/domain"
-	"user-service/internal/infra/write/yugabyte/mapper"
-	"user-service/internal/infra/write/yugabyte/model"
+	"user-service/internal/infra/write/postgres/mapper"
+	"user-service/internal/infra/write/postgres/model"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
@@ -18,10 +18,10 @@ type repo struct {
 	log        logging.Logger
 }
 
-// New constructs the Yugabyte-backed user repository.
+// New constructs the PostgreSQL-backed user repository.
 func New(db *sqlx.DB, translator DBErrorTranslator, log logging.Logger) (domain.UserRepository, error) {
 	if db == nil {
-		return nil, ErrNilYugaByteDB
+		return nil, ErrNilPostgresDB
 	}
 	if translator == nil {
 		return nil, ErrNilDBErrorTranslator
@@ -30,13 +30,13 @@ func New(db *sqlx.DB, translator DBErrorTranslator, log logging.Logger) (domain.
 		return nil, ErrNilLogger
 	}
 
-	return &repo{db: db, translator: translator, log: log.With(logging.String("module", "yugabyte-repository"))}, nil
+	return &repo{db: db, translator: translator, log: log.With(logging.String("module", "postgres-repository"))}, nil
 }
 
 func (r *repo) Create(ctx context.Context, params domain.CreateUserParams) (*domain.User, error) {
 	started := time.Now()
 	status := "success"
-	defer func() { metrics.Global().ObserveDB("yugabyte", "create", "users", status, time.Since(started)) }()
+	defer func() { metrics.Global().ObserveDB("postgres", "create", "users", status, time.Since(started)) }()
 
 	var userRow model.UserRow
 	if err := r.db.QueryRowContext(
@@ -77,7 +77,7 @@ func (r *repo) Create(ctx context.Context, params domain.CreateUserParams) (*dom
 func (r *repo) GetByID(ctx context.Context, userID string) (*domain.User, error) {
 	started := time.Now()
 	status := "success"
-	defer func() { metrics.Global().ObserveDB("yugabyte", "get_by_id", "users", status, time.Since(started)) }()
+	defer func() { metrics.Global().ObserveDB("postgres", "get_by_id", "users", status, time.Since(started)) }()
 
 	var userRow model.UserRow
 	if err := r.db.QueryRowContext(ctx, getUserByID, userID).Scan(
@@ -111,7 +111,7 @@ func (r *repo) GetByUsername(ctx context.Context, username string) (*domain.User
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "get_by_username", "users", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "get_by_username", "users", status, time.Since(started))
 	}()
 
 	var userRow model.UserRow
@@ -146,7 +146,7 @@ func (r *repo) ExistsByUsername(ctx context.Context, username string) (bool, err
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "exists_by_username", "users", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "exists_by_username", "users", status, time.Since(started))
 	}()
 
 	var exists bool
@@ -169,7 +169,7 @@ func (r *repo) ExistsByUsername(ctx context.Context, username string) (bool, err
 func (r *repo) ActivateByID(ctx context.Context, userID string) (*domain.User, error) {
 	started := time.Now()
 	status := "success"
-	defer func() { metrics.Global().ObserveDB("yugabyte", "activate_by_id", "users", status, time.Since(started)) }()
+	defer func() { metrics.Global().ObserveDB("postgres", "activate_by_id", "users", status, time.Since(started)) }()
 
 	var userRow model.UserRow
 	if err := r.db.QueryRowContext(ctx, activateUserByID, userID).Scan(
@@ -203,7 +203,7 @@ func (r *repo) DeactivateByID(ctx context.Context, userID string) error {
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "deactivate_by_id", "users", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "deactivate_by_id", "users", status, time.Since(started))
 	}()
 
 	result, err := r.db.ExecContext(ctx, deactivateUserByID, userID)
@@ -244,7 +244,7 @@ func (r *repo) DeactivateByID(ctx context.Context, userID string) error {
 func (r *repo) DeleteByID(ctx context.Context, userID string) error {
 	started := time.Now()
 	status := "success"
-	defer func() { metrics.Global().ObserveDB("yugabyte", "delete_by_id", "users", status, time.Since(started)) }()
+	defer func() { metrics.Global().ObserveDB("postgres", "delete_by_id", "users", status, time.Since(started)) }()
 
 	result, err := r.db.ExecContext(ctx, deleteUserByID, userID)
 	if err != nil {

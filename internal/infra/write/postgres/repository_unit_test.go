@@ -66,7 +66,7 @@ var _ = Describe("repository unit", func() {
 	It("validates constructor dependencies without a database", func() {
 		repo, err := New(nil, fakeTranslator{}, logger)
 		Expect(repo).To(BeNil())
-		Expect(err).To(MatchError(ErrNilYugaByteDB))
+		Expect(err).To(MatchError(ErrNilPostgresDB))
 
 		repo, err = New(dbx, nil, logger)
 		Expect(repo).To(BeNil())

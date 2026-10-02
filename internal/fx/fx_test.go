@@ -54,7 +54,7 @@ var _ = BeforeSuite(func() {
 	defer cancel()
 
 	fxNATSContainer, fxNATSCfg = startFXNATSContainer(ctx)
-	fxYBContainer, fxYBCfg = startFXYugabyteContainer(ctx)
+	fxYBContainer, fxYBCfg = startFXPostgreSQLContainer(ctx)
 	fxRedisContainer, fxRedisCfg = startFXRedisContainer(ctx)
 })
 
@@ -201,7 +201,7 @@ var _ = Describe("fx providers and invokes", func() {
 	It("propagates repository constructor validation", func() {
 		writeRepo, err := ProvideWriteRepo(nil, nil, logger)
 		Expect(writeRepo).To(BeNil())
-		Expect(err).To(MatchError("yugabyte db is nil"))
+		Expect(err).To(MatchError("postgres db is nil"))
 	})
 
 	It("propagates read repository constructor validation", func() {
@@ -278,15 +278,15 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(err).To(MatchError("kafka brokers are empty"))
 	})
 
-	It("runs migrations and opens a real yugabyte connection", func() {
+	It("runs migrations and opens a real postgres connection", func() {
 		if fxYBContainer == nil {
-			Skip("Docker is not available for the FX Yugabyte suite")
+			Skip("Docker is not available for the FX PostgreSQL suite")
 		}
 		cfg.DB = fxYBCfg
 
 		Expect(InvokeRunMigrations(cfg, logger)).To(Succeed())
 
-		dbx, err := ProvideYugaByteDB(lc, cfg, logger)
+		dbx, err := ProvidePostgresDB(lc, cfg, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dbx.Ping()).To(Succeed())
 		Expect(lc.Stop(context.Background())).To(Succeed())
@@ -307,7 +307,7 @@ var _ = Describe("fx providers and invokes", func() {
 
 		Expect(InvokeRunMigrations(&badCfg, logger)).To(HaveOccurred())
 
-		dbx, err := ProvideYugaByteDB(lc, &badCfg, logger)
+		dbx, err := ProvidePostgresDB(lc, &badCfg, logger)
 		Expect(dbx).To(BeNil())
 		Expect(err).To(HaveOccurred())
 	})
@@ -339,13 +339,13 @@ var _ = Describe("fx providers and invokes", func() {
 
 	It("covers storage and messaging provider success paths with seams", func() {
 		previousRunMigrations := runMigrations
-		previousOpenYugaByteDB := openYugaByteDB
+		previousOpenPostgresDB := openPostgresDB
 		previousOpenRedisClient := openRedisClient
 		previousEnsureStream := ensureStream
 		previousNewEventBroker := newEventBroker
 		defer func() {
 			runMigrations = previousRunMigrations
-			openYugaByteDB = previousOpenYugaByteDB
+			openPostgresDB = previousOpenPostgresDB
 			openRedisClient = previousOpenRedisClient
 			ensureStream = previousEnsureStream
 			newEventBroker = previousNewEventBroker
@@ -357,8 +357,8 @@ var _ = Describe("fx providers and invokes", func() {
 		rawDB, mock, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
 		dbx := sqlx.NewDb(rawDB, "sqlmock")
-		openYugaByteDB = func(config.DBConfig) (*sqlx.DB, error) { return dbx, nil }
-		dbProvided, err := ProvideYugaByteDB(lc, cfg, logger)
+		openPostgresDB = func(config.DBConfig) (*sqlx.DB, error) { return dbx, nil }
+		dbProvided, err := ProvidePostgresDB(lc, cfg, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dbProvided).To(Equal(dbx))
 		mock.ExpectClose()
@@ -546,12 +546,12 @@ func startFXRedisContainer(ctx context.Context) (testcontainers.Container, confi
 	return container, config.RedisConfig{Host: host, Port: redisPort, DB: 0}
 }
 
-func startFXYugabyteContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
+func startFXPostgreSQLContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "yugabytedb/yugabyte:2025.2.2.2-b11",
+			Image:        "postgres:16",
 			ExposedPorts: []string{"5433/tcp"},
-			Cmd:          []string{"bin/yugabyted", "start", "--daemon=false"},
+			Cmd:          []string{"bin/postgresd", "start", "--daemon=false"},
 			WaitingFor:   wait.ForListeningPort("5433/tcp").WithStartupTimeout(3 * time.Minute),
 		},
 		Started: true,
@@ -563,7 +563,7 @@ func startFXYugabyteContainer(ctx context.Context) (testcontainers.Container, co
 	port, err := container.MappedPort(ctx, "5433/tcp")
 	Expect(err).NotTo(HaveOccurred())
 
-	adminDSN := fmt.Sprintf("postgres://yugabyte@%s:%s/yugabyte?sslmode=disable", host, port.Port())
+	adminDSN := fmt.Sprintf("postgres://postgres@%s:%s/postgres?sslmode=disable", host, port.Port())
 	var adminDB *sqlx.DB
 	Eventually(func() error {
 		dbx, openErr := sqlx.Connect("pgx", adminDSN)
@@ -616,7 +616,7 @@ $$;
 		MaxOpenConns:    10,
 		MaxIdleConns:    5,
 		ConnMaxLifetime: time.Minute,
-		MigrationsPath:  "file://" + filepath.Join(userServiceRoot(), "migration", "yugabyte"),
+		MigrationsPath:  "file://" + filepath.Join(userServiceRoot(), "migration", "postgres"),
 		MigrationsTable: "schema_migrations_user_service",
 	}
 }

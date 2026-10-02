@@ -5,6 +5,7 @@ import "time"
 // PullConsumerConfig defines the runtime settings for a single NATS pull
 // consumer.
 type PullConsumerConfig struct {
+	GroupID    string
 	Stream     string
 	Subject    string
 	Durable    string
