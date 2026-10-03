@@ -16,11 +16,11 @@ const (
 	UsersUsernameConstraint   = "users_username_key"
 )
 
-// PgErrorTranslator converts pgx/Yugabyte errors into domain-aware repository
+// PgErrorTranslator converts pgx/PostgreSQL errors into domain-aware repository
 // errors.
 type PgErrorTranslator struct{}
 
-// NewPgErrorTranslator constructs the default Yugabyte error translator.
+// NewPgErrorTranslator constructs the default PostgreSQL error translator.
 func NewPgErrorTranslator() DBErrorTranslator {
 	return &PgErrorTranslator{}
 }

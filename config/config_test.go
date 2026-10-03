@@ -67,7 +67,7 @@ var _ = Describe("Load", func() {
 		Expect(cfg.DB.Port).To(Equal(5433))
 		Expect(cfg.DB.SSLMode).To(Equal("disable"))
 		Expect(cfg.DB.ConnMaxLifetime).To(Equal(5 * time.Minute))
-		Expect(cfg.DB.MigrationsPath).To(Equal("file://migration/yugabyte"))
+		Expect(cfg.DB.MigrationsPath).To(Equal("file://migration/postgres"))
 		Expect(cfg.GRPC.Host).To(Equal("0.0.0.0"))
 		Expect(cfg.GRPC.Port).To(Equal(9502))
 		Expect(cfg.Redis.Host).To(Equal("localhost"))

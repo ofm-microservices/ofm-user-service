@@ -2,12 +2,14 @@ package appfx
 
 import (
 	"context"
+	"fmt"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"time"
 	"user-service/config"
 	app "user-service/internal/application"
 	user "user-service/internal/domain"
 	eventbroker "user-service/internal/presentation/event_broker"
-	events "user-service/internal/presentation/event_broker/nats"
+	kafkaevents "user-service/internal/presentation/event_broker/kafka"
 	grpcserver "user-service/internal/presentation/grpc"
 
 	"go.uber.org/fx"
@@ -17,30 +19,76 @@ import (
 // the FX lifecycle.
 var PresentationModule = fx.Options(
 	fx.Provide(
-		events.NewDomainFailureReasonResolver,
+		kafkaevents.NewDomainFailureReasonResolver,
 		ProvideRegistrationSagaSubscriber,
 		ProvideDetailedUserProjectionRelay,
 		ProvideDetailedUserProjectionSubscriber,
+		ProvideUserRecoverySubscriber,
 		ProvideGRPCServer,
 	),
 	fx.Invoke(
 		InvokeSubscribeRegistrationSaga,
 		InvokeStartDetailedUserProjectionRelay,
 		InvokeStartDetailedUserProjectionSubscriber,
+		InvokeSubscribeUserRecovery,
 		InvokeRunGRPCServer,
 	),
 )
 
-// ProvideRegistrationSagaSubscriber constructs the NATS subscriber that
+// ProvideUserRecoverySubscriber constructs the user-owned migration consumer.
+func ProvideUserRecoverySubscriber(broker eventbroker.EventBroker, service app.UserService, cfg *config.Config, lg logging.Logger) (kafkaevents.UserRecoverySubscriber, error) {
+	return kafkaevents.NewUserRecoverySubscriber(broker, service, cfg.Kafka, lg)
+}
+
+// InvokeSubscribeUserRecovery starts the durable user recovery consumer.
+func InvokeSubscribeUserRecovery(lc fx.Lifecycle, subscriber kafkaevents.UserRecoverySubscriber, lg logging.Logger) {
+	var cancel context.CancelFunc
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		ctx, stop := context.WithCancel(context.Background())
+		cancel = stop
+		go func() {
+			backoff := time.Second
+			for ctx.Err() == nil {
+				if err := subscriber.Subscribe(ctx); err != nil && ctx.Err() == nil {
+					lg.Error("user recovery consumer stopped; retrying", logging.Err(err), logging.String("backoff", backoff.String()))
+				}
+				if ctx.Err() != nil {
+					return
+				}
+				timer := time.NewTimer(backoff)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+				if backoff < 30*time.Second {
+					backoff *= 2
+					if backoff > 30*time.Second {
+						backoff = 30 * time.Second
+					}
+				}
+			}
+		}()
+		return nil
+	}, OnStop: func(context.Context) error {
+		if cancel != nil {
+			cancel()
+		}
+		return nil
+	}})
+}
+
+// ProvideRegistrationSagaSubscriber constructs the Kafka subscriber that
 // consumes registration-saga commands.
 func ProvideRegistrationSagaSubscriber(
 	broker eventbroker.EventBroker,
 	service app.UserService,
 	cfg *config.Config,
-	resolver events.FailureReasonResolver,
+	resolver kafkaevents.FailureReasonResolver,
 	lg logging.Logger,
-) (events.RegistrationSagaSubscriber, error) {
-	return events.NewRegistrationSagaSubscriber(broker, service, cfg.NATS, resolver, lg)
+) (kafkaevents.RegistrationSagaSubscriber, error) {
+	return kafkaevents.NewRegistrationSagaSubscriber(broker, service, cfg.Kafka, resolver, lg)
 }
 
 // ProvideDetailedUserProjectionRelay constructs the relay that forwards
@@ -49,8 +97,8 @@ func ProvideDetailedUserProjectionRelay(
 	broker eventbroker.EventBroker,
 	cfg *config.Config,
 	lg logging.Logger,
-) (events.DetailedUserProjectionRelay, error) {
-	return events.NewDetailedUserProjectionRelay(broker, cfg.NATS, lg)
+) (kafkaevents.DetailedUserProjectionRelay, error) {
+	return kafkaevents.NewDetailedUserProjectionRelay(broker, cfg.Kafka, lg)
 }
 
 // ProvideDetailedUserProjectionSubscriber constructs the Redis projection
@@ -60,8 +108,8 @@ func ProvideDetailedUserProjectionSubscriber(
 	read user.UserReadRepository,
 	cfg *config.Config,
 	lg logging.Logger,
-) (events.DetailedUserProjectionSubscriber, error) {
-	return events.NewDetailedUserProjectionSubscriber(broker, read, cfg.NATS, lg)
+) (kafkaevents.DetailedUserProjectionSubscriber, error) {
+	return kafkaevents.NewDetailedUserProjectionSubscriber(broker, read, cfg.Kafka, lg)
 }
 
 // ProvideGRPCServer constructs the gRPC query server exposed by user-service.
@@ -77,7 +125,7 @@ func ProvideGRPCServer(
 // saga commands.
 func InvokeSubscribeRegistrationSaga(
 	lc fx.Lifecycle,
-	subscriber events.RegistrationSagaSubscriber,
+	subscriber kafkaevents.RegistrationSagaSubscriber,
 	cfg *config.Config,
 	lg logging.Logger,
 ) {
@@ -88,11 +136,11 @@ func InvokeSubscribeRegistrationSaga(
 			runCtx, runCancel := context.WithCancel(context.Background())
 			cancel = runCancel
 
-			if err := subscriber.Subscribe(runCtx); err != nil {
-				lg.Error("subscribe to registration saga commands failed", logging.Err(err))
-				cancel()
-				return err
-			}
+			go func() {
+				if err := subscriber.Subscribe(runCtx); err != nil && runCtx.Err() == nil {
+					lg.Error("subscribe to registration saga commands failed", logging.Err(err))
+				}
+			}()
 
 			lg.Info("user-service initialized", logging.String("env", cfg.App.Env))
 			return nil
@@ -126,7 +174,7 @@ func InvokeRunGRPCServer(lc fx.Lifecycle, srv grpcserver.Server) {
 
 // InvokeStartDetailedUserProjectionRelay starts the detailed-user request
 // relay.
-func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay events.DetailedUserProjectionRelay) {
+func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay kafkaevents.DetailedUserProjectionRelay) {
 	var cancel context.CancelFunc
 
 	lc.Append(fx.Hook{
@@ -135,8 +183,11 @@ func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay events.Detail
 			cancel = runCancel
 
 			go func() {
-				if err := relay.Start(runCtx); err != nil {
-					panic(err)
+				for runCtx.Err() == nil {
+					if err := relay.Start(runCtx); err != nil && runCtx.Err() == nil {
+						fmt.Printf("user detailed projection relay stopped: %v; retrying\\n", err)
+						time.Sleep(2 * time.Second)
+					}
 				}
 			}()
 			return nil
@@ -152,7 +203,7 @@ func InvokeStartDetailedUserProjectionRelay(lc fx.Lifecycle, relay events.Detail
 
 // InvokeStartDetailedUserProjectionSubscriber starts the detailed-user Redis
 // projection worker.
-func InvokeStartDetailedUserProjectionSubscriber(lc fx.Lifecycle, subscriber events.DetailedUserProjectionSubscriber) {
+func InvokeStartDetailedUserProjectionSubscriber(lc fx.Lifecycle, subscriber kafkaevents.DetailedUserProjectionSubscriber) {
 	var cancel context.CancelFunc
 
 	lc.Append(fx.Hook{
@@ -161,8 +212,11 @@ func InvokeStartDetailedUserProjectionSubscriber(lc fx.Lifecycle, subscriber eve
 			cancel = runCancel
 
 			go func() {
-				if err := subscriber.Start(runCtx); err != nil {
-					panic(err)
+				for runCtx.Err() == nil {
+					if err := subscriber.Start(runCtx); err != nil && runCtx.Err() == nil {
+						fmt.Printf("user detailed projection subscriber stopped: %v; retrying\\n", err)
+						time.Sleep(2 * time.Second)
+					}
 				}
 			}()
 			return nil

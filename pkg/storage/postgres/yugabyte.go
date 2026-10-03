@@ -5,13 +5,15 @@ import (
 	"time"
 	"user-service/config"
 
+	"github.com/XSAM/otelsql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var connectDB = sqlx.Connect
 
-// Open creates the user-service YugabyteDB connection pool.
+// Open creates the user-service PostgreSQL connection pool.
 func Open(cfg config.DBConfig) (*sqlx.DB, error) {
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
@@ -23,7 +25,11 @@ func Open(cfg config.DBConfig) (*sqlx.DB, error) {
 		cfg.SSLMode,
 	)
 
-	db, err := connectDB("pgx", dsn)
+	driverName, err := otelsql.Register("pgx", otelsql.WithAttributes(attribute.String("db.system", "postgresql"), attribute.String("db.namespace", cfg.Name)))
+	if err != nil {
+		return nil, WrapOpenDBError(err)
+	}
+	db, err := connectDB(driverName, dsn)
 	if err != nil {
 		return nil, WrapOpenDBError(err)
 	}

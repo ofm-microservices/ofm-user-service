@@ -16,7 +16,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	"user-service/config"
 	user "user-service/internal/domain"
-	pkgdb "user-service/pkg/storage/yugabyte"
+	pkgdb "user-service/pkg/storage/postgres"
 )
 
 var (
@@ -31,15 +31,15 @@ var _ = Describe("repository integration", Ordered, func() {
 
 	BeforeAll(func() {
 		if provider, err := testcontainers.ProviderDocker.GetProvider(); err != nil {
-			Skip("Docker is not available for the Yugabyte suite")
+			Skip("Docker is not available for the PostgreSQL suite")
 		} else if err := provider.Health(context.Background()); err != nil {
-			Skip("Docker is not healthy for the Yugabyte suite")
+			Skip("Docker is not healthy for the PostgreSQL suite")
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
-		repoSuiteContainer, repoSuiteCfg = startYugabyteContainer(ctx)
+		repoSuiteContainer, repoSuiteCfg = startPostgreSQLContainer(ctx)
 		Expect(pkgdb.RunMigrations(repoSuiteCfg)).To(Succeed())
 
 		var err error
@@ -57,7 +57,7 @@ var _ = Describe("repository integration", Ordered, func() {
 	})
 
 	BeforeEach(func() {
-		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE users`)
+		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE outbox_events, users CASCADE`)
 		Expect(err).NotTo(HaveOccurred())
 
 		logger, err = logging.New("user-service", "test", "debug")
@@ -70,7 +70,7 @@ var _ = Describe("repository integration", Ordered, func() {
 	It("validates constructor dependencies", func() {
 		repo, err := New(nil, NewPgErrorTranslator(), logger)
 		Expect(repo).To(BeNil())
-		Expect(err).To(MatchError(ErrNilYugaByteDB))
+		Expect(err).To(MatchError(ErrNilPostgresDB))
 
 		repo, err = New(repoSuiteDB, nil, logger)
 		Expect(repo).To(BeNil())
@@ -94,6 +94,20 @@ var _ = Describe("repository integration", Ordered, func() {
 		Expect(loaded.Username).To(Equal("alex"))
 		Expect(loaded.FirstName).To(Equal("Alex"))
 		Expect(loaded.LastName).To(Equal("Doe"))
+	})
+
+	It("captures insert update and delete in the transactional outbox", func() {
+		userID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+		_, err := repoSuiteDB.Exec(`INSERT INTO users (user_id, username, first_name, last_name, status) VALUES ($1, $2, $3, $4, 'active')`, userID, "outbox-user", "Outbox", "User")
+		Expect(err).NotTo(HaveOccurred())
+		_, err = repoSuiteDB.Exec(`UPDATE users SET first_name = 'Updated' WHERE user_id = $1`, userID)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = repoSuiteDB.Exec(`DELETE FROM users WHERE user_id = $1`, userID)
+		Expect(err).NotTo(HaveOccurred())
+
+		var operations []string
+		Expect(repoSuiteDB.Select(&operations, `SELECT operation FROM outbox_events WHERE aggregate_id = $1 ORDER BY occurred_at, created_at`, userID)).To(Succeed())
+		Expect(operations).To(Equal([]string{"created", "updated", "deactivated"}))
 	})
 
 	It("reports username existence", func() {
@@ -175,12 +189,12 @@ var _ = Describe("repository integration", Ordered, func() {
 	})
 })
 
-func startYugabyteContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
+func startPostgreSQLContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "yugabytedb/yugabyte:2025.2.2.2-b11",
+			Image:        "postgres:16",
 			ExposedPorts: []string{"5433/tcp"},
-			Cmd:          []string{"bin/yugabyted", "start", "--daemon=false"},
+			Cmd:          []string{"bin/postgresd", "start", "--daemon=false"},
 			WaitingFor:   wait.ForListeningPort("5433/tcp").WithStartupTimeout(3 * time.Minute),
 		},
 		Started: true,
@@ -192,7 +206,7 @@ func startYugabyteContainer(ctx context.Context) (testcontainers.Container, conf
 	port, err := container.MappedPort(ctx, "5433/tcp")
 	Expect(err).NotTo(HaveOccurred())
 
-	adminDSN := fmt.Sprintf("postgres://yugabyte@%s:%s/yugabyte?sslmode=disable", host, port.Port())
+	adminDSN := fmt.Sprintf("postgres://postgres@%s:%s/postgres?sslmode=disable", host, port.Port())
 	var adminDB *sqlx.DB
 	Eventually(func() error {
 		dbx, openErr := sqlx.Connect("pgx", adminDSN)
@@ -245,7 +259,7 @@ $$;
 		MaxOpenConns:    10,
 		MaxIdleConns:    5,
 		ConnMaxLifetime: time.Minute,
-		MigrationsPath:  "file://" + filepath.Join(userServiceRoot(), "migration", "yugabyte"),
+		MigrationsPath:  "file://" + filepath.Join(userServiceRoot(), "migration", "postgres"),
 		MigrationsTable: "schema_migrations_user_service",
 	}
 }

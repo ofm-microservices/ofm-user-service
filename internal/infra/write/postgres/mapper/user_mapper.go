@@ -2,10 +2,10 @@ package mapper
 
 import (
 	domain "user-service/internal/domain"
-	"user-service/internal/infra/write/yugabyte/model"
+	"user-service/internal/infra/write/postgres/model"
 )
 
-// MapUserRowToDomain maps the Yugabyte row to the user domain entity.
+// MapUserRowToDomain maps the PostgreSQL row to the user domain entity.
 func MapUserRowToDomain(userRow model.UserRow) *domain.User {
 	return &domain.User{
 		ID:        userRow.ID,

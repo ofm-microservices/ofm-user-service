@@ -8,7 +8,7 @@ import (
 	app "user-service/internal/application"
 	filegrpc "user-service/internal/infra/file/grpc"
 	eventbroker "user-service/internal/presentation/event_broker"
-	natspub "user-service/internal/presentation/event_broker/nats"
+	kafkapub "user-service/internal/presentation/event_broker/kafka"
 
 	"go.uber.org/fx"
 )
@@ -43,5 +43,5 @@ func ProvideFileURLClient(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger
 // ProvideDetailedUserPublisher constructs the detailed user projection
 // publisher.
 func ProvideDetailedUserPublisher(broker eventbroker.EventBroker, cfg *config.Config, lg logging.Logger) (app.DetailedUserPublisher, error) {
-	return natspub.NewDetailedUserPublisher(broker, cfg.NATS, lg)
+	return kafkapub.NewDetailedUserPublisher(broker, cfg.Kafka, lg)
 }

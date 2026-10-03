@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// UserRow is the Yugabyte persistence model for the user write model.
+// UserRow is the PostgreSQL persistence model for the user write model.
 type UserRow struct {
 	ID        string    `db:"user_id"`
 	Username  string    `db:"username"`
